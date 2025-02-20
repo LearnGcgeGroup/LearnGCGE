@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include "solver/gcge_solver.h"
+#include "io/mmio_eigen_result_save.h"
 
 extern "C" {
 #include "app_ccs.h"
@@ -57,7 +58,12 @@ int main(int argc, char *argv[])
     // 5、调用求解函数
     eigenSolverGCG(matA, matB, eigenvalue, eigenvector, &gcgeparam, ops);
     
-    // 6、销毁工作空间
+    // 6、特征值和特征向量结果写入txt文件
+    std::vector<double> eigenvalue1;
+    std::vector<std::vector<double>> eigenvector1;
+    eigenResultSave(eigenvalue, eigenvector);
+
+    // 7、销毁工作空间
     OPS_Destroy(&ccs_ops);
     destroyMatrixCCS(&ccs_matA, &ccs_matB);
 

@@ -1,6 +1,7 @@
 ### 一、GCGE配置编译
 
-#### 1. 下载外部依赖包
+#### 1、Windows系统
+##### 1.1 下载外部依赖包
 GCGE当前依赖的外部包如下：
 - mingw-w64-x86_64-msmpi 10.1.1-11
 - mingw-w64-x86_64-openblas 0.3.28-1
@@ -8,7 +9,7 @@ GCGE当前依赖的外部包如下：
 
 windows平台下msys2环境：采用`pacman -S mingw-w64-x86_64-msmpi 10.1.1-11`进行安装，其他包类似
 
-#### 2. 编译
+##### 1.2 编译
 ```bash
 cd LearnGCGE
 mkdir build
@@ -16,6 +17,45 @@ cd build
 cmake ..
 make 
 ```
+
+##### 1.3 配置编译过程遇见的问题
+编译时不能链接libgomp.a和libmingwthrd.a
+
+--原因：测试用电脑已安装有mingw64(并设置系统变量)
+
+--措施：卸载已有的mingw64，重新按上述流程编译
+
+
+#### 2、Ubuntu18.04系统
+##### 2.1 下载外部依赖包
+- sudo apt install build-essential openssl libssl-dev 
+- 下载编译安装 cmake-3.16.5
+- 下载编译安装 OpenBLAS-0.3.24    
+- 下载编译安装 mpich-4.2.3
+
+##### 2.2 编译
+```bash
+cd LearnGCGE
+mkdir build
+cd build
+cmake ..
+make 
+```
+
+##### 2.3 配置编译过程遇见的问题
+1.当cmake..时，find_package(OpenBLAS REQUIRED)失败
+
+--原因：使用sudo apt install libopenblas-dev安装了低版本openblas
+
+--措施：下载编译安装 OpenBLAS-0.3.24 
+
+
+2.当make时，出现"error: conflicting declaration of C function 'void MPI::Init(int&, char**&)' extern void Init(int&, char**&);"
+
+--原因：使用sudo apt install openmpi-bin libopenmpi-dev安装了低版本openmpi
+
+--措施：下载编译安装 mpich-4.2.3
+
 
 ### 二、运行
 
@@ -37,10 +77,16 @@ make
 ./test.exe K.mtx M.mtx
 ```
 
+#### 3、运行过程遇见的问题
+1.windows系统运行时,不能使用mpiexec命令
 
+--原因：mingw-w64-x86_64-msmpi安装包的部分版本不含msmpi
 
+--措施：在windows系统下载安装msmpisetup.exe
 
+2.ubuntu系统运行时,出现"OpenBLAS Warning : Detect OpenMP Loop and this application may hang. Please rebuild the library with USE_OPENMP=1 option"
 
+--措施：export OMP_NUM_THREADS=1
 
 # GCGE文件结构
 
@@ -100,3 +146,5 @@ GCGE1.0_linux/include/ops_config.h 中包含该软件包涉及的一些计算环
 目前包里提供的mtx转CSC的程序是通用的，注意矩阵文件需要是完整的；
 
 计算结果已与主流特征值解法器SLEPC进行对比，即便是后面较大量级的特征值，在对应精度范围内小数点都是能对上的，且1的代数重数也是一样的
+
+
