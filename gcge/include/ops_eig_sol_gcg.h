@@ -13,16 +13,29 @@
 #include    "ops_lin_sol.h"
 #include    "app_lapack.h"
 
+// GCG求解器的结构体
 typedef struct GCGSolver_ {
-	void   *A        ; void  *B      ; double sigma;
-	double *eval     ; void  **evec  ; 
-	int    nevMax    ; int   multiMax; double gapMin;
-	int    nevInit   ; int   nevGiven; int    nevConv;
-	int    block_size; double tol[2] ; int numIterMax; 
-	int    numIter   ; int    sizeV  ;
-	void   **mv_ws[4]; double *dbl_ws; int *int_ws;
-	int    length_dbl_ws;
-	int    user_defined_multi_linear_solver;	
+	void   *A;		// 刚度矩阵 
+	void   *B;		// 质量矩阵
+	double sigma;	// shift
+	double *eval;	// 特征值数组 
+	void   **evec;	// 特征向量二维数组，分配向量个数 nevMax + block_size
+	int    nevMax;  // 整个任务所要求的特征对个数
+	int   multiMax; 
+	double gapMin;
+	int    nevInit; // 初始选取X矩阵的列数
+	int   nevGiven; // 当前批次求解前，收敛特征对的总个数
+	int    nevConv;	// 当前批次求解后，收敛特征对的总个数
+	int    block_size; // 分块矩阵W或P的列数，预估大于所要求解的特征值的最大代数重数
+	double tol[2] ; // 0: abs_tol, 1: rel_tol
+	int numIterMax; // 最大迭代次数
+	int    numIter; // 当前迭代次数
+	int    sizeV;	// V矩阵的理论列数 
+	void   **mv_ws[4]; // 多向量内存空间 0: V,
+	double *dbl_ws;    // 双精度内存空间，2*sizeV*sizeV + 2*sizeV, 用于存储子空间投影问题的矩阵和对角元，求得的特征向量和特征值
+	int *int_ws;	   // 整型内存空间
+	int  length_dbl_ws;// 双精度内存空间数组长度
+	int  user_defined_multi_linear_solver;	
 	int  check_conv_max_num;
 	char initX_orth_method[8] ; int    initX_orth_block_size; 
 	int  initX_orth_max_reorth; double initX_orth_zero_tol;
