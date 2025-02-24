@@ -77,6 +77,7 @@ typedef struct OPS_ {
 			double *inner_prod, int ldIP, struct OPS_ *ops);
 	void (*MultiVecSetRandomValue) (void **multi_vec, 
 			int    start , int  end , struct OPS_ *ops);
+    /* y = alpha x + beta y */
 	void (*MultiVecAxpby)          (
 			double alpha , void **x , double beta, void **y, 
 			int    *start, int  *end, struct OPS_ *ops);
@@ -116,6 +117,8 @@ typedef struct OPS_ {
 			int *start, int *end, struct OPS_ *ops); 
 	void *multi_linear_solver_workspace;	
 	/* orthonormal */
+    // 将x中(start_x-end_x)间的向量对B进行正交化，返回end_x表示正交化操作的结束位置
+    // x：向量数组，start_x：起始向量，end_x：结束向量，B：对B进行正交化，ops：操作接口
 	void (*MultiVecOrth) (void **x, int start_x, int *end_x, 
 			void *B, struct OPS_ *ops);
 	void *orth_workspace;

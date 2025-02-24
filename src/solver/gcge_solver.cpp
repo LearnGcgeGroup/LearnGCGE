@@ -47,7 +47,7 @@ int destroyMatrixCCS(CCSMAT* ccs_matA, CCSMAT* ccs_matB) {
  * @return 返回值
  */
 int eigenSolverGCG(void* A, void* B, std::vector<double>& eigenvalue, std::vector<std::vector<double>>& eigenvector,
-                          struct GcgeParam* gcgeparam, struct OPS_* ops) {
+                   struct GcgeParam* gcgeparam, struct OPS_* ops) {
     /* 展示算法调用参数 */
     /* 用户希望收敛的特征对个数 nevConv, 最多返回 nevMax 
 	 * 要求 block_size >= multiMax */
