@@ -1,0 +1,16 @@
+%% Eigenvalue and Eigenvector File Protocol
+%--------------------------------------------------------------------------------------------------------------------------------------------------------------
+% size: number of eigenvalues
+% After <size>, a line containing eigenvalues as double values (corresponding to std::vector<double> in the software)
+% rows: number of eigenvectors
+% vector: dimension of each eigenvector
+% After <rows> <vector>, there are 'rows' lines, each representing an eigenvector (corresponding to std::vector<std::vector<double>> in the software)
+%--------------------------------------------------------------------------------------------------------------------------------------------------------------
+eigenValue:
+<size> 
+	[double] [double] [double] 
+
+eigenVector:
+<rows> <vector>
+	[double] [double] [double] 
+	[double] [double] [double] 
