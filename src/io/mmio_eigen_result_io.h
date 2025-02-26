@@ -26,7 +26,7 @@ public:
     std::vector<std::vector<double>> eigenvector_; // 读取时，保存特征向量
 
 private:
-    int size_ = 0;      // 特征值格式
+    int size_ = 0;      // 特征值个数
     int dimension_ = 0; // 特征向量维度
 
 public:
@@ -58,7 +58,7 @@ private:
     int eigenVectorSave(std::ofstream &outFile, const std::vector<double> &eigenvalue);
 
     /**
-     * @brief 将一个特征值数据写入eigenvalue_
+     * @brief 将一行特征值数据写入eigenvalue_
      *
      * @param line 特征值所指行的字符串
      * @return int 错误码 0：正常， -1：错误
@@ -68,7 +68,7 @@ private:
     /**
      * @brief 将一个特征向量数据写入eigenvector_
      *
-     * @param line 特征值所指行的字符串
+     * @param line 特征向量所指行的字符串
      * @return int 错误码 0：正常， -1：错误
      */
     int eigenvectorWrite(std::string &line);
