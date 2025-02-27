@@ -9,6 +9,7 @@
 #include <math.h>
 #include "solver/gcge_solver.h"
 #include "io/io_eigen_result.h"
+#include "io/read_user_param.h"
 
 extern "C" {
 #include "app_ccs.h"
@@ -49,6 +50,11 @@ int main(int argc, char *argv[])
     matB = static_cast<void*>(&ccs_matB);
     GcgeParam gcgeparam{20};
 
+    // 3.1、读出用户参数文件
+    // ExtractMethod extractMethod;
+    // ReadUserParam readUP;
+    // readUP.readUserParam(gcgeparam, extractMethod);
+    
     // 4、设置输出对象
     // 当前设置返回收敛的特征值和特征向量
     // 即求解函数中会resize这两个对象
