@@ -1,0 +1,21 @@
+%%GCGE User Input Parameter Protocol
+%--------------------------------------------------------------------------------------------------------------------------------------------------------------
+% extractionMethod: <enum>, Eigenvalue extraction method. Enum options: [0, 1, 2]，0: BY_ORDER, 1: BY_FREQUENCY, 2: BY_ORDER_AND_FREQUENCY.
+% extractionOrder: <uint32_t>, Number of eigenvalues to extract (default: extract the first N lowest-order eigenvalues).
+% minFreq: <double>, Minimum frequency (must be ≥ 0). Default: 0.
+% maxFreq: <double>, Maximum frequency (must be > minFreq). Default: 100. 
+% max_iter_gcg: <int>, Maximum number of iterations. Default: 1000. 
+% absoluteError: <double>, Absolute error tolerance. Default: 1e-5.
+% relativeError: <double>, Relative error tolerance. Default: 1e-5.
+% initBlock: <uint32_t>, Initial block size for eigenvalue computation. Default: 20.
+% pWBlock: <uint32_t>, Projection subspace block size. Default: 10.
+%--------------------------------------------------------------------------------------------------------------------------------------------------------------
+extractionMethod: <enum>
+extractionOrder: <uint32_t>
+minFreq: <double>
+maxFreq: <double>
+maxIteration: <uint32_t>
+absoluteError: <double>
+relativeError: <double>
+initBlock: <uint32_t>
+pWBlock: <uint32_t>

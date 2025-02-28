@@ -9,6 +9,7 @@
 #include <math.h>
 #include "solver/gcge_solver.h"
 #include "io/io_eigen_result.h"
+#include "io/read_user_param.h"
 
 extern "C" {
 #include "app_ccs.h"
@@ -48,6 +49,34 @@ int main(int argc, char *argv[])
     matA = static_cast<void*>(&ccs_matA);
     matB = static_cast<void*>(&ccs_matB);
     GcgeParam gcgeparam{20};
+
+    // 3.1、读取用户参数文件
+    ExtractMethod extractMethod;    // 结构体对象，保存用户设置的特征值抽取方式
+    ReadUserParam readUP;           // 读取用户参数对象，读取txt求解参数文件
+    char *usrParaFile = argv[3];
+    readUP.readUserParam(gcgeparam, extractMethod, usrParaFile);
+    gcgeparam.shift = 0;
+    if (gcgeparam.nevConv <= 50) {
+        gcgeparam.block_size = gcgeparam.nevConv;
+        gcgeparam.nevInit = 2 * gcgeparam.nevConv;
+        gcgeparam.nevMax = 2 * gcgeparam.nevConv;
+    } else if (gcgeparam.nevConv <= 200) {
+        gcgeparam.block_size = gcgeparam.nevConv / 5;
+        gcgeparam.nevInit = gcgeparam.nevConv;
+        gcgeparam.nevMax = gcgeparam.nevInit + gcgeparam.nevConv;
+    } else if (gcgeparam.nevConv < 800) {
+        gcgeparam.block_size = gcgeparam.nevConv / 8;
+        gcgeparam.nevInit = 6 * gcgeparam.block_size;
+        gcgeparam.nevMax = gcgeparam.nevInit + gcgeparam.nevConv;
+    } else if (gcgeparam.nevConv == 800) {
+        gcgeparam.block_size = 80;
+        gcgeparam.nevInit = 350;
+        gcgeparam.nevMax = 1350;
+    } else {
+        gcgeparam.block_size = 200;
+        gcgeparam.nevInit = 3 * gcgeparam.block_size;
+        gcgeparam.nevMax = gcgeparam.nevConv + gcgeparam.nevInit;
+    }
 
     // 4、设置输出对象
     // 当前设置返回收敛的特征值和特征向量
