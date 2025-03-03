@@ -9,13 +9,13 @@
 
 struct GcgeParam {
     int nevConv{5};                // 希望收敛到的特征值个数
-    int block_size{nevConv};       // 块大小
-    int nevInit{2 * nevConv};      // 初始X块的大小
+    int block_size{nevConv};       // 分块矩阵W或P的列数，预估大于所要求解的特征值的最大代数重数
+    int nevInit{2 * nevConv};      // 初始选取X矩阵的列数
     int max_iter_gcg{1000};        // 最大迭代次数
-    int nevMax{2 * nevConv};       // 最大特征值个数
+    int nevMax{2 * nevConv};       // 整个任务所要求的特征对个数
     double tol_gcg[2]{1e-1, 1e-5}; //精度，0是绝对， 1 相对
     double shift = 1;
-    int nevGiven{0};
+    int nevGiven{0}; // 当前批次求解前，收敛特征对的总个数
     int multiMax{1};
     int flag{0}; // 是否使用外部线性方程组求解器
     double gapMin{1e-5};
