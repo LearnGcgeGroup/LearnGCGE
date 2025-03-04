@@ -35,7 +35,7 @@ typedef struct GCGSolver_ {
 	double *dbl_ws;    // 双精度内存空间，2*sizeV*sizeV + 2*sizeV, 用于存储子空间投影问题的矩阵和对角元，求得的特征向量和特征值，顺序：[特征值 对角元 矩阵 特征向量] 
 	int *int_ws;	   // 整型内存空间
 	int  length_dbl_ws;// 双精度内存空间数组长度
-	int  check_conv_max_num;
+	int  check_conv_max_num; // 单次检查收敛性的最大特征对个数
 	
 	char initX_orth_method[8] ; 
 	int    initX_orth_block_size; 

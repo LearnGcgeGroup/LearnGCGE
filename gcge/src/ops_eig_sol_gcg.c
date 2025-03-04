@@ -680,7 +680,7 @@ static void ComputeW(void **V, void *A, void *B,
     lin_sol = ops_gcg->MultiLinearSolver; // 冗余操作？
     ws = ops_gcg->multi_linear_solver_workspace; // 冗余操作？
     /* b is set to (lambda+sigma) Bx */
-    if (gcg_solver->user_defined_multi_linear_solver == 2) {		// 疑似漏删的代码片段，没有信息显示2号求解器使用何种方法
+    if (gcg_solver->user_defined_multi_linear_solver == 2) {		// 疑似漏删的代码片段，没有信息显示2号求解器使用何种方法 UMFPACK_MultiLinearSolver
         ops_gcg->MultiLinearSolver(A, b, V, start, end, ops_gcg);
     }
 #if TIME_GCG
@@ -1138,6 +1138,7 @@ static void ComputeRayleighRitz(double *ss_matA, double *ss_eval, double *ss_eve
     time_gcg.rr_matW_time += ops_gcg->GetWtime();
 #endif
 
+    // 第一次计算，此时P&W列数为0
     if (sizeX == sizeV) {
 #if DEBUG
         ops_gcg->Printf("V\n");
@@ -1410,6 +1411,8 @@ static void ComputeRayleighRitz(double *ss_matA, double *ss_eval, double *ss_eve
     dcopy(&length, source, &incx, destin, &incy);
 
     /* 恢复特征值 W */
+    // 对本次求解的sizeV - sizeC个特征值进行shift，求解的特征值存储在(W = ss_eval + sizeC) 内存位置，从代码看shift的值为-compW_cg_shift
+    // 意义是什么？
     if (gcg_solver->compW_cg_shift != 0.0) {
         alpha = -1.0;
         length = sizeV - sizeC;
@@ -1519,7 +1522,7 @@ static void GCG(void *A, void *B, double *eval, void **evec,
     ss_eval = gcg_solver->dbl_ws;
     // 特征值初始化
     for (idx = 0; idx < (nevMax + 2 * block_size); ++idx) {
-        ss_eval[idx] = 1.0;
+        ss_eval[idx] = 1.0; // 咱们领域有部分问题特征值起始值为0，是否设置为从0开始，另外这个初始化的作用是什么?
     }
     ss_diag = ss_eval + (nevMax + 2 * block_size);
     ss_matA = ss_diag + (sizeV - sizeC);
@@ -1578,11 +1581,13 @@ static void GCG(void *A, void *B, double *eval, void **evec,
     ComputeRayleighRitz(ss_matA, ss_eval, ss_evec,
                         gcg_solver->compRR_tol, 0, ss_diag, A, V);
 
+    // 将未求解的特征值设置为已求解的最后一个特征值的值(特征值是从小到大求解的)
+    // 第一轮求解时，sizeC为0，因此求解出来的个数为sizeV = sizeX = nevInit
     for (idx = sizeV; idx < (nevMax + 2 * block_size); ++idx) {
         ss_eval[idx] = ss_eval[sizeV - 1];
     }
     /* 更新 ss_mat ss_evec */
-    // sizeC变了(收敛的特征向量多了)，因此将其余变量的内存空间依次后移
+    // sizeC变了(收敛的特征向量多了)，因此将其余变量的内存空间依次后移，此时C为0，sizeV = sizeX = nevInit
     ss_matA = ss_diag + (sizeV - sizeC);
     ss_evec = ss_matA + (sizeV - sizeC) * (sizeV - sizeC);
 
@@ -1596,10 +1601,12 @@ static void GCG(void *A, void *B, double *eval, void **evec,
     *nevConv = (*nevConv) < nevMax ? (*nevConv) : nevMax;
     /* 用户希望收敛的特征对个数 */
     nev0 = *nevConv;
+    // 当前收敛的特征对个数
     *nevConv = 0;
     /* 收敛个数达到 nev 后将 P 和 W 部分扩充为 X 部分 */
     nev = nevInit < nevMax ? 2 * block_size : nev0;
     nev = nev < nev0 ? nev : nev0;
+    // 不进行收敛性判断的目的是什么？假设前几次均不会收敛，不进行收敛性判断是否可以提高效率？
     numIter = 0; /* numIter 取负值时, 小于等于零的迭代不进行判断收敛性 */
 #if PRINT_FIRST_UNCONV
     ops_gcg->Printf("------------------------------\n");
@@ -1621,14 +1628,17 @@ static void GCG(void *A, void *B, double *eval, void **evec,
 #if PRINT_FIRST_UNCONV
         ops_gcg->Printf("%d\t%d\n", numIter, *nevConv);
 #endif
+        // 判断新收敛的特征对个数是否大于sizeP + sizeW
         if (*nevConv >= nev) {
-            if (*nevConv >= nev0) {
+            if (*nevConv >= nev0) { // 当前收敛个数大于用户希望收敛的个数则退出循环，结束算法
                 break;
             } else {
                 /* Update sizeX */
                 nev += sizeP + sizeW;
                 nev = nev < nev0 ? nev : nev0;
+                // 将P和W部分扩充为X部分
                 sizeX += sizeP + sizeW;
+                // sizeX最大只能为nevMax
                 sizeX = sizeX < nevMax ? sizeX : nevMax;
                 /* 将 P 和 W 部分写入 ritz_vec */
                 start[0] = startN;
