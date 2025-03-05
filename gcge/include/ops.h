@@ -5,8 +5,8 @@
  * @copyright Copyright (c) 2025
  * 
  */
-#ifndef  _OPS_H_
-#define  _OPS_H_
+#ifndef _OPS_H_
+#define _OPS_H_
 
 #include "ops_config.h"
 
@@ -15,9 +15,9 @@
 #endif
 
 #if OPS_USE_INTEL_MKL
-#include <omp.h>
 #include <mkl.h>
 #include <mkl_spblas.h>
+#include <omp.h>
 #endif
 
 #if OPS_USE_MPI
@@ -25,59 +25,219 @@
 
 extern double *debug_ptr;
 int CreateMPIDataTypeSubMat(MPI_Datatype *submat_type,
-	int nrows, int ncols, int ldA);
+                            int nrows, int ncols, int ldA);
 int DestroyMPIDataTypeSubMat(MPI_Datatype *submat_type);
 int CreateMPIOpSubMatSum(MPI_Op *op);
-int DestroyMPIOpSubMatSum(MPI_Op *op); 
+int DestroyMPIOpSubMatSum(MPI_Op *op);
 #endif
-int SplitDoubleArray(double *destin, int length, 
-	int num_group, double min_gap, int min_num, int* displs, 
-	double *dbl_ws, int *int_ws);
+int SplitDoubleArray(double *destin, int length,
+                     int num_group, double min_gap, int min_num, int *displs,
+                     double *dbl_ws, int *int_ws);
 
 typedef struct OPS_ {
-	void   (*Printf) (const char *fmt, ...);
-	double (*GetWtime) (void);
-	int    (*GetOptionFromCommandLine) (
-			const char *name, char type, void *data,
-			int argc, char* argv[], struct OPS_ *ops);	  
-	/* mat */
-	void (*MatView) (void *mat, struct OPS_ *ops);  
-	/* y = alpha x + beta y */
-	void (*MatAxpby) (double alpha, void *matX, double beta, void *matY, struct OPS_ *ops);
-	/* vec */
-	void (*VecCreateByMat) (void **des_vec, void *src_mat, struct OPS_ *ops);
-	void (*VecCreateByVec) (void **des_vec, void *src_vec, struct OPS_ *ops);
-	void (*VecDestroy)     (void **des_vec,                struct OPS_ *ops);
-	void (*VecView)           (void *x, 	                         struct OPS_ *ops);
-	/* inner_prod = x'y */
-	void (*VecInnerProd)      (void *x, void *y, double *inner_prod, struct OPS_ *ops);
-	/* inner_prod = x'y for each proc */
-	void (*VecLocalInnerProd) (void *x, void *y, double *inner_prod, struct OPS_ *ops);
-	void (*VecSetRandomValue) (void *x,                              struct OPS_ *ops);
-	/* y = alpha x + beta y */
-	void (*VecAxpby)          (double alpha, void *x, double beta, void *y, struct OPS_ *ops);
-	/* y = mat  * x */
-	void (*MatDotVec)      (void *mat, void *x, void *y, struct OPS_ *ops);
-	/* y = mat' * x */
-	void (*MatTransDotVec) (void *mat, void *x, void *y, struct OPS_ *ops);
-	/* multi-vec */
+    void (*Printf)(const char *fmt, ...);
+    double (*GetWtime)(void);
+    int (*GetOptionFromCommandLine)(
+        const char *name, char type, void *data,
+        int argc, char *argv[], struct OPS_ *ops);
+    /* mat */
+    /**
+    * @brief 打印擦除类型的矩阵内容到输出流
+    *
+    * @param[in] mat  指向擦除类型矩阵结构的指针
+    * @param[in] ops  操作接口
+    *
+    */
+    void (*MatView)(void *mat, struct OPS_ *ops);
+    /* y = alpha x + beta y */
+    /**
+    * @brief 执行矩阵的线性组合操作：alpha * X + beta * Y
+
+    * @param[in] alpha 第一个矩阵的标量系数
+    * @param[in] matX  指向第一个矩阵数据的指针，矩阵的具体格式由实现定义
+    * @param[in] beta  第二个矩阵的标量系数
+    * @param[in] matY  指向第二个矩阵数据的指针，矩阵维度应与matX一致
+    * @param[in] ops   操作接口
+    */
+    void (*MatAxpby)(double alpha, void *matX, double beta, void *matY, struct OPS_ *ops);
+    /* vec */
+    /**
+    * @brief 根据源矩阵创建新向量
+    *
+    * @param[out] des_vec 指向新创建向量指针的二级指针（输出参数）
+    * @param[in]  src_mat 输入源矩阵指针，作为向量创建的数据来源
+    * @param[in]  ops     操作接口
+    *
+    */
+    void (*VecCreateByMat)(void **des_vec, void *src_mat, struct OPS_ *ops);
+    /**
+    * @brief 根据源向量创建新向量，新向量将继承源向量的维度特性
+    * 
+    * @param[out] des_vec 指向新创建向量指针的二级指针（输出参数）
+    * @param[in] src_vec 输入源向量指针，作为新向量的创建模板
+    * @param[in] ops 操作接口
+    * 
+    */
+    void (*VecCreateByVec)(void **des_vec, void *src_vec, struct OPS_ *ops);
+    /**
+    * @brief 销毁向量des_vec
+    *
+    * @param[in,out] des_vec 指向待销毁向量指针的二级指针（输入输出参数）
+    * @param[in]     ops     操作接口
+    *
+    */
+    void (*VecDestroy)(void **des_vec, struct OPS_ *ops);
+    /**
+    * @brief 输出向量内容到标准输出流
+    *
+     * @param[in] x   待展示的向量指针，向量数据格式由具体实现定义
+    * @param[in] ops 操作接口
+    *
+    */
+    void (*VecView)(void *x, struct OPS_ *ops);
+    /* inner_prod = x'y */
+    /**
+    * @brief 计算两个向量的全局内积
+    * 
+    * @param[in] x           输入向量指针，参与内积计算的第一个向量
+    * @param[in] y           输入向量指针，参与内积计算的第二个向量
+    * @param[out] inner_prod 输出标量结果指针，存储计算结果
+    * @param[in] ops         操作接口
+    *
+    */
+    void (*VecInnerProd)(void *x, void *y, double *inner_prod, struct OPS_ *ops);
+    /* inner_prod = x'y for each proc */
+    /**
+    * @brief 计算两个向量的全局内积
+    * 
+    * @param[in] x           输入向量指针，参与计算的第一个向量
+    * @param[in] y           输入向量指针，参与计算的第二个向量
+    * @param[out] inner_prod 输出标量指针，存储全局内积计算结果
+    * @param[in] ops         操作接口
+    *
+    */
+    void (*VecLocalInnerProd)(void *x, void *y, double *inner_prod, struct OPS_ *ops);
+    /**
+    * @brief 为向量设置随机数值
+    *
+    * @param[in,out] x   目标向量指针，将被填充随机数值
+    * @param[in]     ops 操作接口
+    *
+    */
+    void (*VecSetRandomValue)(void *x, struct OPS_ *ops);
+    /* y = alpha x + beta y */
+    /**
+    * @brief 执行向量线性组合操作 y = alpha * x + beta * y
+    *
+    * @param[in] alpha  作用于输入向量x的标量系数
+    * @param[in] x      输入向量指针，参与计算的第一个操作数
+    * @param[in] beta   作用于输入输出向量y的标量系数
+    * @param[in,out] y 输入输出向量指针，存储计算结果的容器
+    * @param[in] ops    操作接口
+    *
+    */
+    void (*VecAxpby)(double alpha, void *x, double beta, void *y, struct OPS_ *ops);
+    /* y = mat  * x */
+    /**
+    * @brief 执行矩阵向量乘积运算 y = mat * x
+    *
+    * @param[in] mat  输入矩阵指针，矩阵存储格式由具体实现定义
+    * @param[in] x    输入向量指针，维度需与矩阵列数匹配
+    * @param[out] y   输出向量指针，接收运算结果，维度需与矩阵行数匹配
+    * @param[in] ops  操作接口
+    *
+    */
+    void (*MatDotVec)(void *mat, void *x, void *y, struct OPS_ *ops);
+    /* y = mat' * x */
+    /**
+ * @brief 执行矩阵转置向量乘积运算 y = mat^T * x
+ *
+ * @param[in] mat  输入矩阵指针，矩阵存储格式需支持转置操作
+ * @param[in] x    输入向量指针，维度需与矩阵转置后的列数匹配
+ * @param[out] y   输出向量指针，接收运算结果，维度需与矩阵转置后的行数匹配
+ * @param[in] ops  操作接口
+ */
+    void (*MatTransDotVec)(void *mat, void *x, void *y, struct OPS_ *ops);
+    /* multi-vec */
     /**
      * @brief 通过num_vec与src_mat创建multi_vec，并给其分配内存空间
      * @param multi_vec 目标多维向量
      * @param num_vec (入参) 用于设置multi_vec的列数(向量的个数)
      * @param src_mat (入参) 用于设置multi_vec的行数(每一维向量的长度)
      */
-	void (*MultiVecCreateByMat)      (void ***multi_vec, int num_vec, void *src_mat, struct OPS_ *ops);
-	void (*MultiVecCreateByVec)      (void ***multi_vec, int num_vec, void *src_vec, struct OPS_ *ops);
-	void (*MultiVecCreateByMultiVec) (void ***multi_vec, int num_vec, void **src_mv, struct OPS_ *ops);
-	void (*MultiVecDestroy)          (void ***multi_vec, int num_vec,                struct OPS_ *ops);
-	/* *vec = multi_vec[col] */
-	void (*GetVecFromMultiVec)    (void **multi_vec, int col, void **vec, struct OPS_ *ops);
-	void (*RestoreVecForMultiVec) (void **multi_vec, int col, void **vec, struct OPS_ *ops);
-	void (*MultiVecView)           (void **x, int start, int end, struct OPS_ *ops);
-	void (*MultiVecLocalInnerProd) (char nsdIP, 
-			void **x, void **y, int is_vec, int *start, int *end, 
-			double *inner_prod, int ldIP, struct OPS_ *ops);
+    void (*MultiVecCreateByMat)(void ***multi_vec, int num_vec, void *src_mat, struct OPS_ *ops);
+
+    /**
+    * @brief 基于源向量创建多维向量结构
+    * 
+    * @param[out] multi_vec 指针输出参数，接收新创建的多维向量数组
+    * @param[in] num_vec    指定要创建的向量个数（多维向量的列数）
+    * @param[in] src_vec    源向量指针，作为新向量维度和存储特性的模板
+    * @param[in] ops        操作接口
+    *
+    */
+    void (*MultiVecCreateByVec)(void ***multi_vec, int num_vec, void *src_vec, struct OPS_ *ops);
+    /**
+    * @brief 基于现有多维向量创建新的多维向量结构
+    * 
+    * @param[out] multi_vec 三维指针输出参数，接收新创建的多维向量数组
+    * @param[in] num_vec    指定要创建的向量个数（新多维向量的列数）
+    * @param[in] src_mv     源多维向量指针数组，作为新向量结构和存储特性的模板
+    * @param[in] ops        操作接口
+    *
+    */
+    void (*MultiVecCreateByMultiVec)(void ***multi_vec, int num_vec, void **src_mv, struct OPS_ *ops);
+    /**
+    * @brief 销毁多维向量结构并释放相关内存
+    * @param[in,out] multi_vec 三维指针参数，指向待销毁的多维向量数组指针
+    * @param[in] num_vec       需要销毁的向量个数（多维向量的列数）
+    * @param[in] ops           操作接口（用于执行实际内存释放操作）
+    */
+    void (*MultiVecDestroy)(void ***multi_vec, int num_vec, struct OPS_ *ops);
+    /* *vec = multi_vec[col] */
+    /**
+    * @brief 从多维向量结构中提取指定列的向量
+    * 
+    * @param[in]  multi_vec  二维指针参数，输入的多维向量数组
+    * @param[in]  col        需要提取的列索引(从0开始计数)
+    * @param[out] vec        二级指针输出参数，接收提取的向量指针
+    * @param[in]  ops        操作接口
+    */
+    void (*GetVecFromMultiVec)(void **multi_vec, int col, void **vec, struct OPS_ *ops);
+    /**
+    * @brief 将临时使用的向量归还到多维向量结构
+    * 
+    * @param[in,out] multi_vec  二维指针参数，操作后恢复完整性的多维向量数组
+    * @param[in]  col        需要归还的目标列索引(从0开始计数)
+    * @param[in,out] vec     二级指针参数，输入时指向待归还的向量指针，操作后置为NULL
+    * @param[in]  ops        操作接口
+    */
+    void (*RestoreVecForMultiVec)(void **multi_vec, int col, void **vec, struct OPS_ *ops);
+    /**
+    * @brief 输出多维向量指定列范围内的内容
+    * 
+    * @param[in] x      二维指针参数，输入的多维向量数组
+    * @param[in] start  起始列索引(包含)
+    * @param[in] end    结束列索引(不包含)
+    * @param[in] ops    操作接口
+    */
+    void (*MultiVecView)(void **x, int start, int end, struct OPS_ *ops);
+    /**
+    * @brief 计算多维向量在指定区间的局部内积
+    * 
+    * @param[in] nsdIP      存储方式标识符('S'对称/'N'普通)
+    * @param[in] x          输入向量/矩阵数组指针
+    * @param[in] y          输入向量/矩阵数组指针
+    * @param[in] is_vec     模式标志(0-矩阵模式/1-向量模式)
+    * @param[in] start      区间起始索引数组指针
+    * @param[in] end        区间结束索引数组指针
+    * @param[out] inner_prod 输出内积结果数组指针
+    * @param[in] ldIP       结果数组的行主维度
+    * @param[in] ops        操作接口
+    */
+    void (*MultiVecLocalInnerProd)(char nsdIP,
+                                   void **x, void **y, int is_vec, int *start, int *end,
+                                   double *inner_prod, int ldIP, struct OPS_ *ops);
     /**
      * @brief 计算多个向量的内积
      * 
@@ -97,9 +257,9 @@ typedef struct OPS_ {
      * @note 实际计算工作由MultiVecLocalInnerProd函数完成
      * @warning start/end数组长度应与计算分块数量匹配
      */
-	void (*MultiVecInnerProd)      (char nsdIP, 
-			void **x, void **y, int is_vec, int *start, int *end, 
-			double *inner_prod, int ldIP, struct OPS_ *ops);
+    void (*MultiVecInnerProd)(char nsdIP,
+                              void **x, void **y, int is_vec, int *start, int *end,
+                              double *inner_prod, int ldIP, struct OPS_ *ops);
     /**
      * @brief 为多向量中的指定列范围设置随机值
      *
@@ -111,8 +271,8 @@ typedef struct OPS_ {
      * @param end   结束列索引（不包含）
      * @param ops   操作接口
      */
-	void (*MultiVecSetRandomValue) (void **multi_vec, 
-			int    start , int  end , struct OPS_ *ops);
+    void (*MultiVecSetRandomValue)(void **multi_vec,
+                                   int start, int end, struct OPS_ *ops);
     /**
      * @brief 计算多列向量的线性组合：y = alpha * x + beta * y
      *
@@ -127,10 +287,10 @@ typedef struct OPS_ {
      * @param end 二维数组，end[0]表示x的结束列，end[1]表示y的结束列
      * @param ops 操作接口
      */
-    void (*MultiVecAxpby) (
-            double alpha , void **x , double beta, void **y, 
-            int    *start, int  *end, struct OPS_ *ops);
-	/* y = x coef + y diag(beta) */
+    void (*MultiVecAxpby)(
+        double alpha, void **x, double beta, void **y,
+        int *start, int *end, struct OPS_ *ops);
+    /* y = x coef + y diag(beta) */
     /**
     * @brief 执行向量/矩阵的线性组合计算 y = beta*y + x*coef
     * 
@@ -163,10 +323,10 @@ typedef struct OPS_ {
      * @param end   结束索引数组，end[0]为x向量的结束列，end[1]为y向量的结束列
      * @param ops   操作接口
      */
-    void (*MatDotMultiVec) (void *mat, void **x, void **y, 
-			int  *start, int *end, struct OPS_ *ops);
-	void (*MatTransDotMultiVec) (void *mat, void **x, void **y, 
-			int  *start, int *end, struct OPS_ *ops);
+    void (*MatDotMultiVec)(void *mat, void **x, void **y,
+                           int *start, int *end, struct OPS_ *ops);
+    void (*MatTransDotMultiVec)(void *mat, void **x, void **y,
+                                int *start, int *end, struct OPS_ *ops);
     /**
      * @brief 计算密集矩阵运算 qAp = Q^T * A * P 或相关变体，结果存入 qAp 数组
      * 
@@ -183,15 +343,15 @@ typedef struct OPS_ {
      * @param vec_ws       工作空间向量指针，用于临时存储
      * @param ops          操作接口
      */
-	void (*MultiVecQtAP) (char ntsA, char ntsdQAP, 
-			void **mvQ  , void   *matA  , void   **mvP, int is_vec, 
-			int  *start , int    *end   , double *qAp , int ldQAP , 
-			void **mv_ws, struct OPS_ *ops);
-	/* Dense matrix vector ops */ 
-	struct OPS_ *lapack_ops; /* ���ܾ��������Ĳ��� */
-    /* matC = alpha*matQ^{\top}*matA*matP + beta*matC 
+    void (*MultiVecQtAP)(char ntsA, char ntsdQAP,
+                         void **mvQ, void *matA, void **mvP, int is_vec,
+                         int *start, int *end, double *qAp, int ldQAP,
+                         void **mv_ws, struct OPS_ *ops);
+    /* Dense matrix vector ops */
+    struct OPS_ *lapack_ops; /* ���ܾ��������Ĳ��� */
+                             /* matC = alpha*matQ^{\top}*matA*matP + beta*matC 
     * dbl_ws: nrowsA*ncolsC */
-    /**
+                             /**
      * @brief 计算稠密矩阵运算 C = alpha * Q^T * A * P + beta * C
      *          支持分块处理、对称矩阵优化及并行计算
      *
@@ -213,99 +373,99 @@ typedef struct OPS_ {
      * @param ldC     C矩阵的leading dimension
      * @param dbl_ws  双精度工作空间指针
      */
-	void (*DenseMatQtAP) (char ntluA, char nsdC,
-			int nrowsA, int ncolsA, /* matA �������� */
-			int nrowsC, int ncolsC, /* matC �������� */
-			double alpha, double *matQ, int ldQ, 
-		              double *matA, int ldA,
-	                      double *matP, int ldP,
-			double beta , double *matC, int ldC,
-			double *dbl_ws);
-	void (*DenseMatOrth) (double *mat, int nrows, int ldm, 
-			int start, int *end, double orth_zero_tol,
-			double *dbl_ws, int length, int *int_ws);
-	/* linear solver */
-	void (*LinearSolver)      (void *mat, void *b, void *x, 
-			struct OPS_ *ops);
-	void *linear_solver_workspace;
-	void (*MultiLinearSolver) (void *mat, void **b, void **x, 
-			int *start, int *end, struct OPS_ *ops); 
-	void *multi_linear_solver_workspace;	
-	/* orthonormal */
+    void (*DenseMatQtAP)(char ntluA, char nsdC,
+                         int nrowsA, int ncolsA, /* matA �������� */
+                         int nrowsC, int ncolsC, /* matC �������� */
+                         double alpha, double *matQ, int ldQ,
+                         double *matA, int ldA,
+                         double *matP, int ldP,
+                         double beta, double *matC, int ldC,
+                         double *dbl_ws);
+    void (*DenseMatOrth)(double *mat, int nrows, int ldm,
+                         int start, int *end, double orth_zero_tol,
+                         double *dbl_ws, int length, int *int_ws);
+    /* linear solver */
+    void (*LinearSolver)(void *mat, void *b, void *x,
+                         struct OPS_ *ops);
+    void *linear_solver_workspace;
+    void (*MultiLinearSolver)(void *mat, void **b, void **x,
+                              int *start, int *end, struct OPS_ *ops);
+    void *multi_linear_solver_workspace;
+    /* orthonormal */
     // 将x中(start_x-end_x)间的向量对B进行正交化，返回end_x表示正交化操作的结束位置
     // x：向量数组，start_x：起始向量，end_x：结束向量，B：对B进行正交化，ops：操作接口
-	void (*MultiVecOrth) (void **x, int start_x, int *end_x, 
-			void *B, struct OPS_ *ops);
-	void *orth_workspace;
-	/* multi grid */
-	/* get multigrid operator for num_levels = 4
+    void (*MultiVecOrth)(void **x, int start_x, int *end_x,
+                         void *B, struct OPS_ *ops);
+    void *orth_workspace;
+    /* multi grid */
+    /* get multigrid operator for num_levels = 4
  	 * P0     P1       P2
  	 * A0     A1       A2        A3
 	 * B0  P0'B0P0  P1'B1P1   P2'B2P2 
 	 * A0 is the original matrix */
-	void (*MultiGridCreate)  (void ***A_array, void ***B_array, void ***P_array,
-		int *num_levels, void *A, void *B, struct OPS_ *ops);
-	/* free A1 A2 A3 B1 B2 B3 P0 P1 P2 
+    void (*MultiGridCreate)(void ***A_array, void ***B_array, void ***P_array,
+                            int *num_levels, void *A, void *B, struct OPS_ *ops);
+    /* free A1 A2 A3 B1 B2 B3 P0 P1 P2 
 	 * A0 and B0 are just pointers */
-	void (*MultiGridDestroy) (void ***A_array , void ***B_array, void ***P_array,
-		int *num_levels, struct OPS_ *ops);
-	void (*VecFromItoJ)      (void **P_array, int level_i, int level_j, 
-		void *vec_i, void *vec_j, void **vec_ws, struct OPS_ *ops);
-	void (*MultiVecFromItoJ) (void **P_array, int level_i, int level_j, 
-		void **multi_vec_i, void **multi_vec_j, int *startIJ, int *endIJ, 
-		void ***multi_vec_ws, struct OPS_ *ops);
-	/* eigen solver */
-	void (*EigenSolver) (void *A, void *B , double *eval, void **evec,
-		int nevGiven, int *nevConv, struct OPS_ *ops);	
-	void *eigen_solver_workspace;
-	
-	/* for pas */
-	struct OPS_ *app_ops;
+    void (*MultiGridDestroy)(void ***A_array, void ***B_array, void ***P_array,
+                             int *num_levels, struct OPS_ *ops);
+    void (*VecFromItoJ)(void **P_array, int level_i, int level_j,
+                        void *vec_i, void *vec_j, void **vec_ws, struct OPS_ *ops);
+    void (*MultiVecFromItoJ)(void **P_array, int level_i, int level_j,
+                             void **multi_vec_i, void **multi_vec_j, int *startIJ, int *endIJ,
+                             void ***multi_vec_ws, struct OPS_ *ops);
+    /* eigen solver */
+    void (*EigenSolver)(void *A, void *B, double *eval, void **evec,
+                        int nevGiven, int *nevConv, struct OPS_ *ops);
+    void *eigen_solver_workspace;
+
+    /* for pas */
+    struct OPS_ *app_ops;
 } OPS;
 
-void OPS_Create  (OPS **ops);
-void OPS_Setup   (OPS  *ops);
-void OPS_Destroy (OPS **ops);
+void OPS_Create(OPS **ops);
+void OPS_Setup(OPS *ops);
+void OPS_Destroy(OPS **ops);
 
 /* multi-vec */
-void DefaultPrintf (const char *fmt, ...);
-double DefaultGetWtime (void);
-int  DefaultGetOptionFromCommandLine (
-		const char *name, char type, void *value,
-		int argc, char* argv[], struct OPS_ *ops);
-void DefaultMultiVecCreateByVec      (void ***multi_vec, int num_vec, void *src_vec, struct OPS_ *ops);
-void DefaultMultiVecCreateByMat      (void ***multi_vec, int num_vec, void *src_mat, struct OPS_ *ops);
-void DefaultMultiVecCreateByMultiVec (void ***multi_vec, int num_vec, void **src_mv, struct OPS_ *ops);
-void DefaultMultiVecDestroy          (void ***multi_vec, int num_vec, struct OPS_ *ops);
-void DefaultGetVecFromMultiVec    (void **multi_vec, int col, void **vec, struct OPS_ *ops);
-void DefaultRestoreVecForMultiVec (void **multi_vec, int col, void **vec, struct OPS_ *ops);
-void DefaultMultiVecView           (void **x, int start, int end, struct OPS_ *ops);
-void DefaultMultiVecLocalInnerProd (char nsdIP, void **x, void **y, int is_vec, int *start, int *end, 
-	double *inner_prod, int ldIP, struct OPS_ *ops);
-void DefaultMultiVecInnerProd      (char nsdIP, void **x, void **y, int is_vec, int *start, int *end, 
-	double *inner_prod, int ldIP, struct OPS_ *ops);
-void DefaultMultiVecSetRandomValue (void **x, int start, int end, struct OPS_ *ops);
-void DefaultMultiVecAxpby          (
-	double alpha , void **x , double beta, void **y, 
-	int    *start, int  *end, struct OPS_ *ops);
-void DefaultMultiVecLinearComb     (
-	void   **x   , void **y , int is_vec, 
-	int    *start, int  *end, 
-	double *coef , int  ldc , 
-	double *beta , int  incb, struct OPS_ *ops);
-void DefaultMatDotMultiVec      (void *mat, void **x, void **y, 
-	int  *start, int *end, struct OPS_ *ops);
-void DefaultMatTransDotMultiVec (void *mat, void **x, void **y, 
-	int  *start, int *end, struct OPS_ *ops);
-void DefaultMultiVecQtAP        (char ntsA, char ntsdQAP, 
-	void **mvQ   , void   *matA  , void   **mvP, int is_vec, 
-	int  *startQP, int    *endQP , double *qAp , int ldQAP , 
-	void **mv_ws, struct OPS_ *ops);
+void DefaultPrintf(const char *fmt, ...);
+double DefaultGetWtime(void);
+int DefaultGetOptionFromCommandLine(
+    const char *name, char type, void *value,
+    int argc, char *argv[], struct OPS_ *ops);
+void DefaultMultiVecCreateByVec(void ***multi_vec, int num_vec, void *src_vec, struct OPS_ *ops);
+void DefaultMultiVecCreateByMat(void ***multi_vec, int num_vec, void *src_mat, struct OPS_ *ops);
+void DefaultMultiVecCreateByMultiVec(void ***multi_vec, int num_vec, void **src_mv, struct OPS_ *ops);
+void DefaultMultiVecDestroy(void ***multi_vec, int num_vec, struct OPS_ *ops);
+void DefaultGetVecFromMultiVec(void **multi_vec, int col, void **vec, struct OPS_ *ops);
+void DefaultRestoreVecForMultiVec(void **multi_vec, int col, void **vec, struct OPS_ *ops);
+void DefaultMultiVecView(void **x, int start, int end, struct OPS_ *ops);
+void DefaultMultiVecLocalInnerProd(char nsdIP, void **x, void **y, int is_vec, int *start, int *end,
+                                   double *inner_prod, int ldIP, struct OPS_ *ops);
+void DefaultMultiVecInnerProd(char nsdIP, void **x, void **y, int is_vec, int *start, int *end,
+                              double *inner_prod, int ldIP, struct OPS_ *ops);
+void DefaultMultiVecSetRandomValue(void **x, int start, int end, struct OPS_ *ops);
+void DefaultMultiVecAxpby(
+    double alpha, void **x, double beta, void **y,
+    int *start, int *end, struct OPS_ *ops);
+void DefaultMultiVecLinearComb(
+    void **x, void **y, int is_vec,
+    int *start, int *end,
+    double *coef, int ldc,
+    double *beta, int incb, struct OPS_ *ops);
+void DefaultMatDotMultiVec(void *mat, void **x, void **y,
+                           int *start, int *end, struct OPS_ *ops);
+void DefaultMatTransDotMultiVec(void *mat, void **x, void **y,
+                                int *start, int *end, struct OPS_ *ops);
+void DefaultMultiVecQtAP(char ntsA, char ntsdQAP,
+                         void **mvQ, void *matA, void **mvP, int is_vec,
+                         int *startQP, int *endQP, double *qAp, int ldQAP,
+                         void **mv_ws, struct OPS_ *ops);
 /* multi-grid */
-void DefaultVecFromItoJ(void **P_array, int level_i, int level_j, 
-	void *vec_i, void *vec_j, void **vec_ws, struct OPS_ *ops);
-void DefaultMultiVecFromItoJ(void **P_array, int level_i, int level_j, 
-	void **multi_vec_i, void **multi_vec_j, int *startIJ, int *endIJ, 
-	void ***multi_vec_ws, struct OPS_ *ops);
+void DefaultVecFromItoJ(void **P_array, int level_i, int level_j,
+                        void *vec_i, void *vec_j, void **vec_ws, struct OPS_ *ops);
+void DefaultMultiVecFromItoJ(void **P_array, int level_i, int level_j,
+                             void **multi_vec_i, void **multi_vec_j, int *startIJ, int *endIJ,
+                             void ***multi_vec_ws, struct OPS_ *ops);
 
-#endif  /* -- #ifndef _OPS_H_ -- */
+#endif /* -- #ifndef _OPS_H_ -- */
