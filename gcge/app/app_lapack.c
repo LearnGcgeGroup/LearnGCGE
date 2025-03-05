@@ -893,57 +893,202 @@ static void MultiVecQtAP(char ntsA, char ntsdQAP,
 }
 
 /* vec */
+/**
+ * @brief 基于现有向量创建新向量
+ *
+ * 该函数是对MultiVecCreateByVec函数的封装，专门用于创建单个向量的场景。
+ * 通过设置nvec参数为1，简化单向量的创建过程。
+ * 
+ * @param[out] des_vec 输出参数，指向新创建向量指针的指针。调用成功后*des_vec将指向新分配的内存
+ * @param[in] src_vec 输入参数，作为创建模板的源向量指针。新向量将继承源向量的维度等属性
+ * @param[in] ops 操作指针
+ */
 static void VecCreateByVec(LAPACKVEC **des_vec, LAPACKVEC *src_vec, struct OPS_ *ops) {
     MultiVecCreateByVec(des_vec, 1, src_vec, ops);
     return;
 }
+
+/**
+ * @brief 通过矩阵创建向量对象
+ * 
+ * @param[out] des_vec 指向LAPACKVEC指针的指针，用于接收新创建的向量对象
+ * @param[in] src_mat 输入矩阵对象指针，作为向量的数据源
+ * @param[in] ops 操作接口
+ * 
+ * @note 本函数通过调用MultiVecCreateByMat实现单向量创建：
+ * - 固定第一个参数为1，表示创建单个向量
+ * - 将矩阵结构转换为向量结构
+ * 
+ */
 static void VecCreateByMat(LAPACKVEC **des_vec, LAPACKMAT *src_mat, struct OPS_ *ops) {
     MultiVecCreateByMat(des_vec, 1, src_mat, ops);
     return;
 }
+
+/**
+ * @brief 销毁LAPACK向量对象并释放相关资源
+ *
+ * 该函数通过调用MultiVecDestroy接口来释放由des_vec指向的LAPACK向量对象。
+ * 调用完成后，会将被释放的向量指针置为NULL，避免野指针问题。
+ *
+ * @param[in,out] des_vec 指向LAPACK向量指针的二级指针。函数执行后，
+ *                        *des_vec将被置为NULL
+ * @param[in] ops 操作接口
+ *
+ * @note 本函数实际调用MultiVecDestroy时传入的num参数固定为1，
+ *       表示处理单个向量对象的销毁
+ */
 static void VecDestroy(LAPACKVEC **des_vec, struct OPS_ *ops) {
     MultiVecDestroy(des_vec, 1, ops);
     return;
 }
+
+/**
+ * @brief 查看/显示LAPACK向量的内容
+ * 
+ * 该函数通过调用MultiVecView实现向量查看功能，默认从第0个元素开始，
+ * 以步长1显示整个向量的内容。
+ * 
+ * @param[in] x 待查看的LAPACK向量对象指针，不可为空
+ * @param[in] ops 操作控制结构体指针，包含底层实现所需的上下文信息
+ * 
+ * @return 无
+ */
 static void VecView(LAPACKVEC *x, struct OPS_ *ops) {
     MultiVecView(x, 0, 1, ops);
     return;
 }
+/**
+ * @brief 计算两个向量的内积（静态函数）
+ *
+ * @param[in] x 输入向量1指针，指向LAPACK向量结构体
+ * @param[in] y 输入向量2指针，指向LAPACK向量结构体
+ * @param[out] inner_prod 计算结果输出指针，存储标量内积值
+ * @param[in] ops 运算控制结构体指针，包含底层运算接口
+ *
+ */
 static void VecInnerProd(LAPACKVEC *x, LAPACKVEC *y, double *inner_prod, struct OPS_ *ops) {
+    /* 定义计算范围的起始和结束索引 */
     int start[2] = {0, 0}, end[2] = {1, 1};
+    /* 调用多维向量内积计算函数
+     * 参数说明：
+     * 'S' - 对称计算模式
+     * 0 - 保留参数（未使用）
+     * start/end - 子向量范围
+     * 1 - 步长参数
+     */
     MultiVecInnerProd('S', x, y, 0, start, end, inner_prod, 1, ops);
     return;
 }
+
+/**
+ * @brief 计算两个向量的局部内积
+ * 
+ * 通过调用MultiVecLocalInnerProd函数实现，使用'S'模式在指定索引范围内进行计算，
+ * 结果存储在inner_prod中。
+ * 
+ * @param[in] x 第一个输入向量指针
+ * @param[in] y 第二个输入向量指针
+ * @param[out] inner_prod 存储计算结果的双精度浮点数指针
+ * @param[in] ops 操作上下文结构体指针，包含执行环境或配置信息
+ * 
+ */
 static void VecLocalInnerProd(LAPACKVEC *x, LAPACKVEC *y, double *inner_prod, struct OPS_ *ops) {
     int start[2] = {0, 0}, end[2] = {1, 1};
     MultiVecLocalInnerProd('S', x, y, 0, start, end, inner_prod, 1, ops);
     return;
 }
+
+/**
+ * @brief 为向量设置随机数值
+ * 
+ * 使用标准随机数生成器填充目标向量的全部元素。本函数通过调用多向量工具函数
+ * 实现核心功能，采用默认范围[0,1)的随机数分布。
+ * 
+ * @param[in,out] x   指向LAPACKVEC结构的指针，接收随机数值的目标向量。
+ *                    - 输入时应为已分配内存的向量结构
+ *                    - 输出时将包含新生成的随机数值
+ * @param[in] ops    操作接口
+ * 
+ */
 static void VecSetRandomValue(LAPACKVEC *x, struct OPS_ *ops) {
     MultiVecSetRandomValue(x, 0, 1, ops);
     return;
 }
+
+/**
+ * @brief 执行向量线性组合运算 alpha * x + beta * y
+ *
+ * @param[in] alpha 标量系数，作用于x向量的乘数
+ * @param[in] x 输入向量指针，使用LAPACKVEC结构描述的向量
+ * @param[in] beta 标量系数，作用于y向量的乘数
+ * @param[in,out] y 输入输出向量指针，结果将存储在此向量中
+ * @param[in] ops 操作控制结构体指针，包含底层运算所需的控制参数
+ *
+ */
 static void VecAxpby(double alpha, LAPACKVEC *x, double beta, LAPACKVEC *y, struct OPS_ *ops) {
     int start[2] = {0, 0}, end[2] = {1, 1};
     MultiVecAxpby(alpha, x, beta, y, start, end, ops);
     return;
 }
+
+/**
+ * @brief 计算矩阵与向量的点乘运算
+ * 
+ * 本函数通过调用底层MatDotMultiVec接口，使用预定义的范围参数完成矩阵-向量乘法。
+ * 
+ * @param[in] mat 输入矩阵指针，要求矩阵已正确初始化
+ * @param[in] x 输入向量指针，参与计算的向量数据
+ * @param[out] y 输出向量指针，存储计算结果的内存区域
+ * @param[in] ops 操作接口
+ * 
+ */
 static void MatDotVec(LAPACKMAT *mat, LAPACKVEC *x, LAPACKVEC *y, struct OPS_ *ops) {
+    /*start/end参数固定为{{0,0},{1,1}}，即提取的是单个向量运算*/
     int start[2] = {0, 0}, end[2] = {1, 1};
     MatDotMultiVec(mat, x, y, start, end, ops);
     return;
 }
+/**
+ * @brief 计算矩阵转置与向量的点积（封装为单向量版本）
+ * 
+ * 该函数通过设置固定的起始/结束索引，调用多向量版本的矩阵转置点积函数，
+ * 实现单向量运算的简化封装。适用于处理单个向量的矩阵转置乘法场景。
+ * 
+ * @param[in] mat  输入矩阵对象指针，须为有效的LAPACK格式矩阵
+ * @param[in] x    输入向量指针，维度应与矩阵列数匹配
+ * @param[out] y   输出向量指针，用于存储计算结果，须预分配内存
+ * @param[in] ops  运算控制参数指针，包含底层BLAS运算所需配置
+ * 
+ * @note 通过硬编码的start=[0,0]和end=[1,1]参数，将多向量运算限制为单向量处理。
+ *       实际运算委托给MatTransDotMultiVec函数实现
+ */
 static void MatTransDotVec(LAPACKMAT *mat, LAPACKVEC *x, LAPACKVEC *y, struct OPS_ *ops) {
     int start[2] = {0, 0}, end[2] = {1, 1};
     MatTransDotMultiVec(mat, x, y, start, end, ops);
     return;
 }
+
+/**
+ * @brief 打印LAPACK矩阵内容到输出流
+ *
+ * @param[in] mat  指向LAPACKMAT矩阵结构的指针，包含矩阵维度、数据指针和行间距
+ * @param[in] ops  输出接口
+ *
+ * @note 矩阵元素按行主序打印，每列元素用制表符分隔，行末换行
+ * @warning 矩阵数据指针必须已正确初始化，ldd值应大于等于矩阵行数
+ */
 static void MatView(LAPACKMAT *mat, struct OPS_ *ops) {
     int row, col;
     double *destin;
+    // 遍历矩阵所有行
     for (row = 0; row < mat->nrows; ++row) {
+        // 遍历当前行的所有列
         for (col = 0; col < mat->ncols; ++col) {
+            /* 计算元素地址：基地址 + 列号*行间距 + 行偏移
+               对应LAPACK的列主序存储模式 */
             destin = mat->data + (mat->ldd) * col + row;
+            // 完成一行输出后换行
             ops->Printf("%6.4e\t", *destin);
         }
         ops->Printf("\n");
