@@ -54,7 +54,7 @@ typedef struct GCGSolver_ {
 	int  compW_cg_max_iter    ; 
 	double compW_cg_rate; 
 	double compW_cg_tol       ; 
-	char   compW_cg_tol_type[8];
+	char   compW_cg_tol_type[8]; // 计算W是用的CG法中收敛容差的判断方式(abs or rel)
 	int  compW_cg_auto_shift  ; // 是否自动按照内置公式计算shift
 	double compW_cg_shift;      // 王博士认为这个成员变量是多余的，没有实际作用
 	int  compW_cg_order       ; // 用于是否调用ComputeW12（冗余的函数）的判断，可删去

@@ -299,8 +299,8 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec,
     nevConv = sizeC + idx;
 
     // offset[0]：记录未收敛区间的个数
-    // offset[2n-1] 和 offset[2n]：分别表示第 n 个未收敛区间的起始和结束位置，1 <= n <= offset[0]。
-    // offset[2n-1] <= idx < offset[2n]中 idx 是不收敛的标号
+    // offset[2n+1] 和 offset[2n+2]：分别表示第 n 个未收敛区间的起始和结束位置，0 <= n < offset[0]。
+    // offset[2n+1] <= idx < offset[2n+2]中 idx 是不收敛的标号
     int state; // 标记当前状态，1 表示当前处于收敛状态，0 表示当前处于未收敛状态
     int num_unconv; // 标记当前未收敛区间的长度
     /* 1 1 0 0 1 1 1 1 0 0 1 0 1 0 0 0 0 0 0 */
@@ -320,14 +320,16 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec,
             // 增加未收敛区间的长度
             ++num_unconv;
             if (num_unconv == sizeN) {
-                offset[offset[0] * 2 + 2] = startN + idx + 1;
+                offset[offset[0] * 2 + 2] = startN + idx + 1; // +1是因为区间为[a, b)
                 ++offset[0];
                 break;
             }
         } else {
             /* 上一个是不收敛的 */
             if (!state) {
+                // 记录当前未收敛区间的终止位置
                 offset[offset[0] * 2 + 2] = startN + idx;
+                // 增加未收敛区间的个数
                 ++offset[0];
                 state = 1;
             }
@@ -336,9 +338,13 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec,
 
     // sizeN: 未收敛区间的最大允许长度
     if (num_unconv < sizeN) {
-        if (state == 1) {
-            offset[offset[0] * 2 + 1] = startN + numCheck;
+        // state表示当前值是否收敛
+        // 若循环完成时处于不收敛状态(可能最后两个值均不收敛，此时state为0)，此时怎么处理？
+        if (state == 1) { // 如果当前是收敛状态则新建一个区间(即之后未检查的全部认为不收敛)
+            offset[offset[0] * 2 + 1] = startN + numCheck; // 新建一个区间从startN + numCheck开始
         }
+        // 设置新区间的结束位置或者在校验到numCheck位置时仍未收敛的区间的结束位置
+        // 该区间长度取未sizeN - num_unconv,从而使得未收敛区间的长度为sizeN, 用于之后计算W
         offset[offset[0] * 2 + 2] = startN + numCheck + sizeN - num_unconv;
         offset[offset[0] * 2 + 2] = offset[offset[0] * 2 + 2] < endX ? offset[offset[0] * 2 + 2] : endX;
         assert(offset[offset[0] * 2 + 1] < offset[offset[0] * 2 + 2]);
@@ -558,7 +564,7 @@ static void ComputeW(void **V, void *A, void *B,
     void **b = ritz_vec;
     int start[2], end[2], block_size, length, inc, idx;
     double *destin = dbl_ws;
-	// 自动动态选取shift参数
+    // 1）自动动态选取shift参数
     double sigma = 0.0;
     if (gcg_solver->compW_cg_auto_shift == 1) {
         sigma = -ss_eval[sizeC] + ((ss_eval[sizeC + 1] - ss_eval[sizeC]) * 0.01);
@@ -581,7 +587,7 @@ static void ComputeW(void **V, void *A, void *B,
 	startW = endP; 
 	inc = 1; 
 
-	// 逐列构造线性方程组右端项b， 注意：block_size 和 destin 会累加更新
+	// 2）逐列构造线性方程组右端项b， 注意：block_size 和 destin 会累加更新
 	for (idx = 0; idx < offset[0]; ++idx) {
 
 		length   = offset[idx * 2 + 2]-offset[idx * 2 + 1];
@@ -592,6 +598,7 @@ static void ComputeW(void **V, void *A, void *B,
 		end[0] = offset[idx * 2 + 2];
 		start[1] = startW+block_size; 
 		end[1] = start[1]+length;
+        // 将ritz_vec中未收敛的列向量[offset[idx * 2 + 1], offset[idx * 2 + 2])拷贝至V中(startW的位置)
 		ops_gcg->MultiVecAxpby(1.0, ritz_vec, 0.0, V, start, end, ops_gcg);
 #if 0
 		/* 20210530 Ax = lambda Bx - theta Ax */
@@ -624,6 +631,7 @@ static void ComputeW(void **V, void *A, void *B,
         int i;
 #if 1
         // Step 2: b = (lambda+sigma) Bx
+        // 论文中b = (lambda - sigma) Bx，是否有影响?
 		/* shift eigenvalues with sigma */
         for (i = start[0]; i < end[0]; ++i)
             ss_eval[i] += sigma;
@@ -658,6 +666,7 @@ static void ComputeW(void **V, void *A, void *B,
             ops_gcg->Printf("%d, %d: %f\n", block_size + i, start[0] + i, tmp_sigma[block_size + i]);
         }
 #endif
+        // destin存放b向量组，一次for循环，偏移一次存储数据所占的位置
         destin += length;
         block_size += length;
 #if DEBUG
@@ -665,10 +674,11 @@ static void ComputeW(void **V, void *A, void *B,
         ops_gcg->MultiVecView(b, start[1], end[1], ops_gcg);
 #endif
     }
+    // 更新W矩阵的结束位置，W中放置的是未收敛的特征向量对应的b = (lambda+sigma) Bx向量
     endW = startW + block_size;
 
-    /* solve x */
-    start[0] = offset[1];
+    /* 3）solve x */
+    start[0] = offset[1]; // 这里为什么是offset[1]，表示从第一个未收敛的区间起始位置开始计算？
     end[0] = start[0] + block_size;
     start[1] = startW;
     end[1] = endW;
@@ -680,7 +690,7 @@ static void ComputeW(void **V, void *A, void *B,
     lin_sol = ops_gcg->MultiLinearSolver; // 冗余操作？
     ws = ops_gcg->multi_linear_solver_workspace; // 冗余操作？
     /* b is set to (lambda+sigma) Bx */
-    if (gcg_solver->user_defined_multi_linear_solver == 2) {		// 疑似漏删的代码片段，没有信息显示2号求解器使用何种方法 UMFPACK_MultiLinearSolver
+    if (gcg_solver->user_defined_multi_linear_solver == 2) {		// 疑似漏删的代码片段，没有信息显示2号求解器使用何种方法 好像是UMFPACK_MultiLinearSolver
         ops_gcg->MultiLinearSolver(A, b, V, start, end, ops_gcg);
     }
 #if TIME_GCG
@@ -691,7 +701,8 @@ static void ComputeW(void **V, void *A, void *B,
 #if 1
         // 配置BlockPCG求解器参数
         if (sigma != 0.0 && B != NULL && ops_gcg->MatAxpby != NULL) {
-            ops_gcg->MatAxpby(sigma, B, 1.0, A, ops_gcg);	// 构造线性方程组系数矩阵  /* 20210628 A = sigma B + A */
+            ops_gcg->MatAxpby(sigma, B, 1.0, A, ops_gcg);    // 构造线性方程组系数矩阵  /* 20210628 A = sigma B + A */
+            // 没有给预条件，给了预条件会不会收敛更快?
             MultiLinearSolverSetup_BlockPCG(
                 gcg_solver->compW_cg_max_iter,
                 gcg_solver->compW_cg_rate,
@@ -714,6 +725,7 @@ static void ComputeW(void **V, void *A, void *B,
     time_gcg.linsol_time -= ops_gcg->GetWtime();
 #endif
 	// 非精确求解线性方程组
+    // start, end两个参数的含义是什么？
     ops_gcg->MultiLinearSolver(A, b, V, start, end, ops_gcg);
 #if 1
     /* 20210628 recover A */
@@ -758,6 +770,7 @@ static void ComputeW(void **V, void *A, void *B,
             gcg_solver->compW_orth_zero_tol,
             mv_ws[0], dbl_ws, ops_gcg);
 
+    // W对B进行正交化
     ops_gcg->MultiVecOrth(V, startW, &endW, B, ops_gcg);
 #if DEBUG
     ops_gcg->Printf("Orth W in V, %d, %d\n", startW, endW);
@@ -776,7 +789,7 @@ static void ComputeW(void **V, void *A, void *B,
         ops_gcg->Printf("\n");
     }
 #endif
-
+    // W长度为正交的长度
     sizeW = endW - startW;
 
 #if 0	

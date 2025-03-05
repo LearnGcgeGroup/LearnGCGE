@@ -407,6 +407,20 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
 	return;
 }      
 	      
+/**
+ * @brief 设置块预条件共轭梯度法求解器的相关参数
+ * 
+ * @param max_iter 求解器的最大迭代次数
+ * @param rate 求解器的收敛速率
+ * @param tol 收敛容差
+ * @param tol_type 收敛容差的判断方式(abs or rel)
+ * @param mv_ws 提供矩阵向量乘法的工作空间(临时空间)
+ * @param dbl_ws 提供双精度浮点数的工作空间(临时空间)
+ * @param int_ws 提供整数类型的工作空间(临时空间)
+ * @param pc 预条件子（Preconditioner）的指针
+ * @param MatDotMultiVec 矩阵向量乘法函数的指针
+ * @param ops 操作集合
+ */
 void MultiLinearSolverSetup_BlockPCG(int max_iter, double rate, double tol,
 		const char *tol_type, void **mv_ws[3], double *dbl_ws, int *int_ws,
 		void *pc, void (*MatDotMultiVec)(void**x,void**y,int*,int*,void **z,int s,struct OPS_*),
