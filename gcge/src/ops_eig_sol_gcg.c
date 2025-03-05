@@ -33,6 +33,9 @@ static int sizeP, startP, endP;
 static int sizeW, startW, endW;
 static int sizeC, sizeX, sizeV, endX;
 
+// 矩阵运算的临时空间
+// mv_ws[0]: 用于存放A *  ritz_vec结果
+// mv_ws[1]: 用于存放B *  ritz_vec结果
 static void **mv_ws[3];
 static double *dbl_ws;
 static int *int_ws;
@@ -159,20 +162,24 @@ static void InitializeX(void **V, void **ritz_vec, void *B, int nevGiven) {
     return;
 }
 
-// X = V C 将子空间基底下的特征向量转换为原空间基底下的特征向量
-// Input:
-// 		V 矩阵
-//		ss_evec 子空间基底下小规模问题的特征向量 C
-// Output:
-// 		ritz_vec 原空间基底下的近似特征向量
+
+/**
+ * @brief X = V C将子空间基底下的特征向量转换为原空间基底下的特征向量
+ * 
+ * @param ritz_vec (输出变量)原空间基底下的近似特征向量
+ * @param V 输入 子空间的基底
+ * @param ss_evec 输入 子空间基底下小规模问题的特征向量 C
+ */
 static void ComputeRitzVec(void **ritz_vec, void **V, double *ss_evec) {
 #if TIME_GCG
     time_gcg.compRV_time -= ops_gcg->GetWtime();
 #endif
     int start[2], end[2];
     double *coef;
+    // start[0] - end[0]为子空间V的列数
     start[0] = startN;
     end[0] = endW;
+    // start[1] - end[1]为原空间ritz_vec的列数(即收敛的特征向量的列数)
     start[1] = startN;
     end[1] = endX;
     coef = ss_evec;
@@ -204,6 +211,18 @@ static void ComputeRitzVec(void **ritz_vec, void **V, double *ss_evec) {
     return;
 }
 
+/**
+ * @brief 检查收敛性
+ * 
+ * @param A 矩阵A
+ * @param B 矩阵B
+ * @param ss_eval 子空间问题的特征值（与原空间特征值相同）
+ * @param ritz_vec 特征向量
+ * @param numCheck 要检查的特征向量列数
+ * @param tol 收敛容差
+ * @param offset 
+ * @return int 返回已经收敛的特征值个数
+ */
 static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec,
                             int numCheck, double *tol, int *offset) {
 #if TIME_GCG
@@ -219,21 +238,24 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec,
     end[0] = start[0] + numCheck;
     start[1] = 0;
     end[1] = numCheck;
+    // 计算A * ritz_vec
     ops_gcg->MatDotMultiVec(A, ritz_vec, mv_ws[0], start, end, ops_gcg);
+    // 计算B * ritz_vec
     ops_gcg->MatDotMultiVec(B, ritz_vec, mv_ws[1], start, end, ops_gcg);
-    /* lambda Bx */
-    ops_gcg->MultiVecLinearComb(NULL, mv_ws[1], 0, start, end,
-                                NULL, 0, ss_eval + startN, 1, ops_gcg);
+    // 计算 lambda * B * ritz_vec
+    ops_gcg->MultiVecLinearComb(NULL, mv_ws[1], 0, start, end, NULL, 0, ss_eval + startN, 1, ops_gcg);
     start[0] = 0;
     end[0] = numCheck;
     start[1] = 0;
     end[1] = numCheck;
-    /* Ax - lambda Bx */
+    /* 计算 Ax - lambda Bx */
     ops_gcg->MultiVecAxpby(-1.0, mv_ws[1], 1.0, mv_ws[0], start, end, ops_gcg);
-    /* ��ʹ�� ss_evec ���� */
-    inner_prod = dbl_ws + (sizeV - sizeC) * sizeW;
+    /* 不使用 ss_evec 部分 */
+    inner_prod = dbl_ws + (sizeV - sizeC) * sizeW; // inner_prod为内积结果的存储首地址
+    // 计算numCheck个残差向量的2范数的平方
     ops_gcg->MultiVecInnerProd('D', mv_ws[0], mv_ws[0], 0,
                                start, end, inner_prod, 1, ops_gcg);
+    // 计算numCheck个残差向量的2范数
     for (idx = 0; idx < numCheck; ++idx) {
         inner_prod[idx] = sqrt(inner_prod[idx]);
 #if DEBUG
@@ -242,8 +264,9 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec,
                         inner_prod[idx], inner_prod[idx] / fabs(ss_eval[startN + idx]));
 #endif
     }
+    // 判断绝对残量 和 相对残量是否满足收敛条件
     for (idx = 0; idx < numCheck; ++idx) {
-        /* ���Բ��� �� ��Բ��� ��ֱ�С�� tol[0] �� tol[1] */
+        /* 绝对残量 和 相对残量 需分别小于 tol[0] 和 tol[1] */
         if (fabs(ss_eval[startN + idx]) > tol[1]) {
             if (inner_prod[idx] > tol[0] ||
                 inner_prod[idx] > fabs(ss_eval[startN + idx]) * tol[1]) {
@@ -265,49 +288,63 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec,
             }
         }
     }
+    // 获取不是重根的第一个不收敛的特征值索引
     for (; idx > 0; --idx) {
-        /* ���һ������������ֵ���һ��������������ֵ�����ظ� */
+        /* 最后一个收敛的特征值与第一个不收敛的特征值不是重根 */
         if (fabs((ss_eval[startN + idx - 1] - ss_eval[startN + idx]) / ss_eval[startN + idx - 1]) > gcg_solver->gapMin) {
             break;
         }
     }
+    // 计算当前收敛的特征值总个数
     nevConv = sizeC + idx;
 
-    /* offset[0] Ϊδ������ĸ���, offset[2n-1] <= idx < offset[2n]
-     * idx �ǲ������ı�� 1 <= n <= offset[0] */
-    int state, num_unconv;
+    // offset[0]：记录未收敛区间的个数
+    // offset[2n+1] 和 offset[2n+2]：分别表示第 n 个未收敛区间的起始和结束位置，0 <= n < offset[0]。
+    // offset[2n+1] <= idx < offset[2n+2]中 idx 是不收敛的标号
+    int state; // 标记当前状态，1 表示当前处于收敛状态，0 表示当前处于未收敛状态
+    int num_unconv; // 标记当前未收敛区间的长度
     /* 1 1 0 0 1 1 1 1 0 0 1 0 1 0 0 0 0 0 0 */
-    offset[0] = 0;
+    offset[0] = 0; // 未收敛区间的个数
     state = 1;
     num_unconv = 0;
     for (idx = 0; idx < numCheck; ++idx) {
-        /* ��һ���ǲ������� */
-        if (inner_prod[idx] > tol[0] ||
-            inner_prod[idx] > fabs(ss_eval[startN + idx]) * tol[1]) {
-            /* ��һ���������� */
+        /* 这一个是不收敛的 */
+        if (inner_prod[idx] > tol[0] || inner_prod[idx] > fabs(ss_eval[startN + idx]) * tol[1]) {
+            /* 上一个是收敛的 */
             if (state) {
+                // 记录当前未收敛区间的起始位置
                 offset[offset[0] * 2 + 1] = startN + idx;
+                // 标记未收敛
                 state = 0;
             }
+            // 增加未收敛区间的长度
             ++num_unconv;
             if (num_unconv == sizeN) {
-                offset[offset[0] * 2 + 2] = startN + idx + 1;
+                offset[offset[0] * 2 + 2] = startN + idx + 1; // +1是因为区间为[a, b)
                 ++offset[0];
                 break;
             }
         } else {
-            /* ��һ���ǲ������� */
+            /* 上一个是不收敛的 */
             if (!state) {
+                // 记录当前未收敛区间的终止位置
                 offset[offset[0] * 2 + 2] = startN + idx;
+                // 增加未收敛区间的个数
                 ++offset[0];
                 state = 1;
             }
         }
     }
+
+    // sizeN: 未收敛区间的最大允许长度
     if (num_unconv < sizeN) {
-        if (state == 1) {
-            offset[offset[0] * 2 + 1] = startN + numCheck;
+        // state表示当前值是否收敛
+        // 若循环完成时处于不收敛状态(可能最后两个值均不收敛，此时state为0)，此时怎么处理？
+        if (state == 1) { // 如果当前是收敛状态则新建一个区间(即之后未检查的全部认为不收敛)
+            offset[offset[0] * 2 + 1] = startN + numCheck; // 新建一个区间从startN + numCheck开始
         }
+        // 设置新区间的结束位置或者在校验到numCheck位置时仍未收敛的区间的结束位置
+        // 该区间长度取未sizeN - num_unconv,从而使得未收敛区间的长度为sizeN, 用于之后计算W
         offset[offset[0] * 2 + 2] = startN + numCheck + sizeN - num_unconv;
         offset[offset[0] * 2 + 2] = offset[offset[0] * 2 + 2] < endX ? offset[offset[0] * 2 + 2] : endX;
         assert(offset[offset[0] * 2 + 1] < offset[offset[0] * 2 + 2]);
@@ -324,12 +361,14 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec,
                         offset[idx * 2 + 1], offset[idx * 2 + 2]);
     }
 #endif
+    // 需要存在未收敛区间
     assert(offset[0] > 0);
     return nevConv;
 }
 
-// 构建子空间P：N_new - N_old
-// Input:
+// 构建子空间P： P^{(i+1)} = X^{(i+1)} - X^{(i)} (X^{(i)T} B X^{(i+1)})，
+// 			   对应于 N_new - N_old (N_old^T B N_new)
+// Input: 
 //		ss_evec 子空间基底下小规模问题的特征向量 C
 //		offset
 // Output:
@@ -509,12 +548,13 @@ static void ComputeX(void **V, void **ritz_vec) {
     return;
 }
 
-// 构建子空间W：通过块PCG法求解 W, W = A^{-1}B X \Lambda = A^{-1}B [N_2 N_1'] \Lambda(N_2 N_1')
+// 通过动态选取参数sigma的反幂法迭代步构建子空间W：
+// 		块PCG法非精确求解 W, A W = B X \Lambda = B [N_2 N_1'] \Lambda(N_2 N_1')
 // Input:
 //		A 矩阵, B 矩阵
 //		ss_eval 近似特征值, ritz_vec 近似特征向量
-//		offset
-// Output:
+//		offset 矩阵W的列偏移索引， offset[0]为列数， [offset[idx*2+1],offset[idx*2+2]) 为第idx列位置索引
+// Output: 
 //		V 矩阵
 static void ComputeW(void **V, void *A, void *B,
                      double *ss_eval, void **ritz_vec, int *offset) {
@@ -524,7 +564,7 @@ static void ComputeW(void **V, void *A, void *B,
     void **b = ritz_vec;
     int start[2], end[2], block_size, length, inc, idx;
     double *destin = dbl_ws;
-
+    // 1）自动动态选取shift参数
     double sigma = 0.0;
     if (gcg_solver->compW_cg_auto_shift == 1) {
         sigma = -ss_eval[sizeC] + ((ss_eval[sizeC + 1] - ss_eval[sizeC]) * 0.01);
@@ -540,19 +580,26 @@ static void ComputeW(void **V, void *A, void *B,
 #if DEBUG
     ops_gcg->Printf("ss_eval[%d] = %e, sigma = %e\n", sizeC, ss_eval[sizeC], gcg_solver->sigma);
 #endif
-    assert(gcg_solver->compW_cg_auto_shift == 0 || gcg_solver->user_defined_multi_linear_solver == 0);
-    /* initialize */
-    block_size = 0;
-    startW = endP;
-    inc = 1;
-    for (idx = 0; idx < offset[0]; ++idx) {
-        length = offset[idx * 2 + 2] - offset[idx * 2 + 1];
-        /* initialize x */
-        start[0] = offset[idx * 2 + 1];
-        end[0] = offset[idx * 2 + 2];
-        start[1] = startW + block_size;
-        end[1] = start[1] + length;
-        ops_gcg->MultiVecAxpby(1.0, ritz_vec, 0.0, V, start, end, ops_gcg);
+	assert(gcg_solver->compW_cg_auto_shift == 0 || gcg_solver->user_defined_multi_linear_solver == 0);
+
+	/* initialize */
+	block_size = 0; // W矩阵的元素计数器，用于接下来的for循环 
+	startW = endP; 
+	inc = 1; 
+
+	// 2）逐列构造线性方程组右端项b， 注意：block_size 和 destin 会累加更新
+	for (idx = 0; idx < offset[0]; ++idx) {
+
+		length   = offset[idx * 2 + 2]-offset[idx * 2 + 1];
+		
+		/* initialize x */
+		// 将子空间投影问题的解作为线性方程组迭代的初始解
+		start[0] = offset[idx * 2 + 1]; 
+		end[0] = offset[idx * 2 + 2];
+		start[1] = startW+block_size; 
+		end[1] = start[1]+length;
+        // 将ritz_vec中未收敛的列向量[offset[idx * 2 + 1], offset[idx * 2 + 2])拷贝至V中(startW的位置)
+		ops_gcg->MultiVecAxpby(1.0, ritz_vec, 0.0, V, start, end, ops_gcg);
 #if 0
 		/* 20210530 Ax = lambda Bx - theta Ax */
 		int tmp_start[2], tmp_end[2]; double tmp_theta = 0.0;
@@ -565,6 +612,8 @@ static void ComputeW(void **V, void *A, void *B,
         ops_gcg->MultiVecView(V, start[1], end[1], ops_gcg);
 #endif
         /* set b, b = (lambda+sigma) Bx */
+
+		// Step 1: b = BX
         start[0] = offset[idx * 2 + 1];
         end[0] = offset[idx * 2 + 2];
         start[1] = offset[1] + block_size;
@@ -581,7 +630,9 @@ static void ComputeW(void **V, void *A, void *B,
 
         int i;
 #if 1
-        /* shift eigenvalues with sigma */
+        // Step 2: b = (lambda+sigma) Bx
+        // 论文中b = (lambda - sigma) Bx，是否有影响?
+		/* shift eigenvalues with sigma */
         for (i = start[0]; i < end[0]; ++i)
             ss_eval[i] += sigma;
         ops_gcg->MultiVecLinearComb(NULL, b, 0, start, end,
@@ -615,6 +666,7 @@ static void ComputeW(void **V, void *A, void *B,
             ops_gcg->Printf("%d, %d: %f\n", block_size + i, start[0] + i, tmp_sigma[block_size + i]);
         }
 #endif
+        // destin存放b向量组，一次for循环，偏移一次存储数据所占的位置
         destin += length;
         block_size += length;
 #if DEBUG
@@ -622,33 +674,35 @@ static void ComputeW(void **V, void *A, void *B,
         ops_gcg->MultiVecView(b, start[1], end[1], ops_gcg);
 #endif
     }
+    // 更新W矩阵的结束位置，W中放置的是未收敛的特征向量对应的b = (lambda+sigma) Bx向量
     endW = startW + block_size;
 
-    /* solve x */
-    start[0] = offset[1];
+    /* 3）solve x */
+    start[0] = offset[1]; // 这里为什么是offset[1]，表示从第一个未收敛的区间起始位置开始计算？
     end[0] = start[0] + block_size;
     start[1] = startW;
     end[1] = endW;
 #if TIME_GCG
     time_gcg.linsol_time -= ops_gcg->GetWtime();
 #endif
-    void (*lin_sol)(void *, void **, void **, int *, int *, struct OPS_ *);
+    void (*lin_sol)(void *, void **, void **, int *, int *, struct OPS_ *); // 冗余操作？ 作为中间变量对 ops_gcg->MultiLinearSolver 进行了一次备份和恢复
     void *ws;
-    lin_sol = ops_gcg->MultiLinearSolver;
-    ws = ops_gcg->multi_linear_solver_workspace;
+    lin_sol = ops_gcg->MultiLinearSolver; // 冗余操作？
+    ws = ops_gcg->multi_linear_solver_workspace; // 冗余操作？
     /* b is set to (lambda+sigma) Bx */
-    if (gcg_solver->user_defined_multi_linear_solver == 2) {
+    if (gcg_solver->user_defined_multi_linear_solver == 2) {		// 疑似漏删的代码片段，没有信息显示2号求解器使用何种方法 好像是UMFPACK_MultiLinearSolver
         ops_gcg->MultiLinearSolver(A, b, V, start, end, ops_gcg);
     }
 #if TIME_GCG
     time_gcg.linsol_time += ops_gcg->GetWtime();
 #endif
     if (gcg_solver->user_defined_multi_linear_solver == 0 ||
-        gcg_solver->user_defined_multi_linear_solver == 2) {
+        gcg_solver->user_defined_multi_linear_solver == 2) {	// 疑似漏删的代码片段，没有信息显示2号求解器使用何种方法  
 #if 1
-        /* 20210628 A = sigma B + A */
+        // 配置BlockPCG求解器参数
         if (sigma != 0.0 && B != NULL && ops_gcg->MatAxpby != NULL) {
-            ops_gcg->MatAxpby(sigma, B, 1.0, A, ops_gcg);
+            ops_gcg->MatAxpby(sigma, B, 1.0, A, ops_gcg);    // 构造线性方程组系数矩阵  /* 20210628 A = sigma B + A */
+            // 没有给预条件，给了预条件会不会收敛更快?
             MultiLinearSolverSetup_BlockPCG(
                 gcg_solver->compW_cg_max_iter,
                 gcg_solver->compW_cg_rate,
@@ -670,11 +724,13 @@ static void ComputeW(void **V, void *A, void *B,
 #if TIME_GCG
     time_gcg.linsol_time -= ops_gcg->GetWtime();
 #endif
+	// 非精确求解线性方程组
+    // start, end两个参数的含义是什么？
     ops_gcg->MultiLinearSolver(A, b, V, start, end, ops_gcg);
 #if 1
     /* 20210628 recover A */
     if (sigma != 0.0 && B != NULL && ops_gcg->MatAxpby != NULL) {
-        /* A = -sigma B + A */
+        // 恢复矩阵A /* A = -sigma B + A */
         ops_gcg->MatAxpby(-sigma, B, 1.0, A, ops_gcg);
     }
 #endif
@@ -687,8 +743,8 @@ static void ComputeW(void **V, void *A, void *B,
 #if TIME_GCG
     time_gcg.linsol_time += ops_gcg->GetWtime();
 #endif
-    ops_gcg->MultiLinearSolver = lin_sol;
-    ops_gcg->multi_linear_solver_workspace = ws;
+    ops_gcg->MultiLinearSolver = lin_sol; // 冗余操作？
+    ops_gcg->multi_linear_solver_workspace = ws; // 冗余操作？
 
 #if DEBUG
     ops_gcg->Printf("W = inv(A) b:\n");
@@ -714,6 +770,7 @@ static void ComputeW(void **V, void *A, void *B,
             gcg_solver->compW_orth_zero_tol,
             mv_ws[0], dbl_ws, ops_gcg);
 
+    // W对B进行正交化
     ops_gcg->MultiVecOrth(V, startW, &endW, B, ops_gcg);
 #if DEBUG
     ops_gcg->Printf("Orth W in V, %d, %d\n", startW, endW);
@@ -732,7 +789,7 @@ static void ComputeW(void **V, void *A, void *B,
         ops_gcg->Printf("\n");
     }
 #endif
-
+    // W长度为正交的长度
     sizeW = endW - startW;
 
 #if 0	
@@ -750,6 +807,8 @@ static void ComputeW(void **V, void *A, void *B,
     return;
 }
 
+// 据反馈为一次无效的改进，可以忽略。 
+// for linear response eigenvalue problems
 static void ComputeW12(void **V, void *A, void *B,
                        double *ss_eval, void **ritz_vec, int *offset) {
 #if TIME_GCG
@@ -856,6 +915,7 @@ static void ComputeW12(void **V, void *A, void *B,
     ops_gcg->MultiVecView(b, offset[1], offset[1] + (total_length / 2), ops_gcg);
 #endif
 
+	// 非精确求解线性方程组
     ops_gcg->MultiLinearSolver(A, b, V, start, end, ops_gcg);
 #if TIME_GCG
     time_gcg.linsol_time += ops_gcg->GetWtime();
@@ -1005,7 +1065,7 @@ static void ComputeW12(void **V, void *A, void *B,
  * @param ss_eval (输出变量)存储计算得到的小规模特征值问题的特征值，一个一维数组，大小为 sizeV−sizeC
  * @param ss_evec (输出变量)存储计算得到的小规模特征值问题的特征向量，一个二维数组，大小为 (sizeV−sizeC)×(sizeV−sizeC)
  * @param tol (输入变量)求解小规模特征值问题的阈值参数，用于控制特征值求解的精度。
- * @param nevConv (输入变量)需要收敛的特征值个数？？当前收敛的？
+ * @param nevConv (输入变量)当前收敛的特征值个数
  * @param ss_diag (输出变量)存储子空间投影问题的矩阵ss_matA的对角部分
  * @param A (输入变量)刚度矩阵
  * @param V (输入变量)子空间基向量矩阵 V
@@ -1020,8 +1080,10 @@ static void ComputeRayleighRitz(double *ss_matA, double *ss_eval, double *ss_eve
 #if DEBUG
     ops_gcg->Printf("PtAP sizeP = %d\n", sizeP);
 #endif
+    // 算法中V^HAV矩阵可以由各子矩阵结合而成，以下为分别计算各子矩阵，同时将子矩阵结果放置在V^HAV矩阵在ss_matA内存中的目标位置中
+    // 算法部分介绍可参考以下网址30分钟处: https://www.bilibili.com/video/BV1xA411v7tq/?spm_id_from=333.1387.homepage.video_card.click&vd_source=4446b9dec56155067868c2fb6ce3f7ee
+    // 1）先计算 P^H A P 部分
     if (sizeP > 0) {
-        /* 计算 P^H A P 部分 */
         nrows = sizeP;
         ncols = sizeP;
         nrowsA = sizeV - sizeC;
@@ -1033,19 +1095,24 @@ static void ComputeRayleighRitz(double *ss_matA, double *ss_eval, double *ss_eve
                               1.0, ss_evec + (sizeV - sizeC) * (sizeX - sizeC), sizeV - sizeC, /* Q */
                               ss_matA, sizeV - sizeC,                                          /* A */
                               ss_evec + (sizeV - sizeC) * (sizeX - sizeC), sizeV - sizeC,      /* P */
+                              // dbl_ws此时指向放置完其他数据后的首地址(即未被占用的工作空间的首地址)
                               0.0, dbl_ws, nrows,                                              /* C */
+                              // (dbl_ws ————dbl_ws + nrows * ncols)的范围用于放置C(即P^T*A*P)的计算结果
+                              // dbl_ws + nrows * ncols之后的位置用于算法内部临时使用
                               dbl_ws + nrows * ncols);
     }
 
     sizeV = sizeX + sizeP + sizeW;
-    startN = startN + (nevConv - sizeC);
+    // 通过nevConv更新N与sizeC：nevConv - sizeC为新增的收敛特征值个数
+    startN = startN + (nevConv - sizeC); // startN从未收敛的第一个特征值开始
     endN = endN + (nevConv - sizeC);
     endN = (endN < endX) ? endN : endX;
 
     sizeN = endN - startN;
     sizeC = nevConv;
 
-    /* 更新 ss_mat ss_evec */
+    /* 已收敛部分C不再考虑，更新 ss_mat ss_evec 起始地址*/
+    // 由于sizeC大小变更，ss_matA与ss_evec均向后平移相应位置
     ss_matA = ss_diag + (sizeV - sizeC);
     ss_evec = ss_matA + (sizeV - sizeC) * (sizeV - sizeC);
 
@@ -1056,8 +1123,9 @@ static void ComputeRayleighRitz(double *ss_matA, double *ss_eval, double *ss_eve
 #if TIME_GCG
     time_gcg.rr_matW_time -= ops_gcg->GetWtime();
 #endif
+    // 2）再计算V^H A W 部分
     if (sizeW > 0) {
-        /* 计算 V^H A W 部分 */
+        /* 计算 [N N']^T A W 部分 */
         start[0] = startN;
         end[0] = endW;
         start[1] = startW;
@@ -1067,7 +1135,7 @@ static void ComputeRayleighRitz(double *ss_matA, double *ss_eval, double *ss_eve
          *               (endW-startW) 个 向量 */
         ops_gcg->MultiVecQtAP('S', 'N', V, A, V, 0, start, end, destin, sizeV - sizeC,
                               mv_ws[0], ops_gcg);
-        /* 对称化 */
+        /* 利用对称性，直接得到 W^T A [N N'] 部分*/
         length = sizeX + sizeP - sizeC;
         source = ss_matA + (sizeV - sizeC) * (sizeX + sizeP - sizeC);
         incx = 1;
@@ -1083,6 +1151,7 @@ static void ComputeRayleighRitz(double *ss_matA, double *ss_eval, double *ss_eve
     time_gcg.rr_matW_time += ops_gcg->GetWtime();
 #endif
 
+    // 第一次计算，此时P&W列数为0
     if (sizeX == sizeV) {
 #if DEBUG
         ops_gcg->Printf("V\n");
@@ -1106,21 +1175,21 @@ static void ComputeRayleighRitz(double *ss_matA, double *ss_eval, double *ss_eve
             end[1] = start[1] + block_size;
         }
     } else {
-        /* 置零 X P 部分, 忽略 C 部分 */
+        /* 初始化置零 [X P]T A [X P] 部分, C 部分在标定位置时已忽略 */
         length = sizeX + sizeP - sizeC;
-        destin = ss_matA;
+        destin = ss_matA; // 起始地址是否有错？，是否应该为ss_matA + sizeC
         for (idx = 0; idx < length; ++idx) {
             memset(destin, 0, length * sizeof(double));
             destin += sizeV - sizeC;
         }
-        /* 赋值 X 部分的对角线 */
+        /* 赋值 X^T A X 部分的对角线，即为特征值 */
         length = sizeX - sizeC;
         source = ss_eval + sizeC;
         incx = 1;
         destin = ss_matA;
         incy = (sizeV - sizeC) + 1;
         dcopy(&length, source, &incx, destin, &incy);
-        /* 更新 P^H A P 部分*/
+        /* 更新 P^T A P 部分*/
         length = sizeP;
         source = dbl_ws;
         incx = 1;
@@ -1142,6 +1211,8 @@ static void ComputeRayleighRitz(double *ss_matA, double *ss_eval, double *ss_eve
     dcopy(&length, source, &incx, destin, &incy);
 
     /* 对 ss_matA 进行 shift */
+    // 实现逻辑只对对角线元素进行了shift
+    // 该部分代码会进入执行(double类型值永远不会相等)，若想在compW_cg_shift不为0才进入，需要修改if判断逻辑
     if (gcg_solver->compW_cg_shift != 0.0) {
         alpha = 1.0;
         length = sizeV - sizeC;
@@ -1353,6 +1424,8 @@ static void ComputeRayleighRitz(double *ss_matA, double *ss_eval, double *ss_eve
     dcopy(&length, source, &incx, destin, &incy);
 
     /* 恢复特征值 W */
+    // 对本次求解的sizeV - sizeC个特征值进行shift，求解的特征值存储在(W = ss_eval + sizeC) 内存位置，从代码看shift的值为-compW_cg_shift
+    // 意义是什么？
     if (gcg_solver->compW_cg_shift != 0.0) {
         alpha = -1.0;
         length = sizeV - sizeC;
@@ -1399,7 +1472,7 @@ static void ComputeRayleighRitz(double *ss_matA, double *ss_eval, double *ss_eve
 static void GCG(void *A, void *B, double *eval, void **evec,
                 int nevGiven, int *nevConv, struct OPS_ *ops) {
 #if 1
-    /* offsetW[0] 表示有多少个块,
+    /* offsetW[0] 表示有多少个列,
      * offsetW[1] <= idx < offsetW[2] 是未收敛的编号 */
     int *offsetP, *offsetW, *ptr_tmp;
     gcg_solver = (GCGSolver *)ops->eigen_solver_workspace;
@@ -1411,7 +1484,11 @@ static void GCG(void *A, void *B, double *eval, void **evec,
     int nevMax, multiMax, block_size, nevInit, nev0, nev;
     int numIterMax, numIter, numCheck;
     void **V, **ritz_vec;
-    double *ss_matA, *ss_diag, *ss_eval, *ss_evec, *tol;
+    double *ss_matA; // 子空间的矩阵
+    double*ss_diag;  // 子空间矩阵的对角线元素
+    double *ss_eval; // 子空间矩阵的特征值
+    double *ss_evec; // 子空间矩阵的特征向量(按列存储)
+    double *tol;
     int start[2], end[2], idx;
     double *coef;
 
@@ -1456,8 +1533,9 @@ static void GCG(void *A, void *B, double *eval, void **evec,
     mv_ws[2] = gcg_solver->mv_ws[3];
     // 标定各个数组在内存空间的起始位置
     ss_eval = gcg_solver->dbl_ws;
+    // 特征值初始化
     for (idx = 0; idx < (nevMax + 2 * block_size); ++idx) {
-        ss_eval[idx] = 1.0;
+        ss_eval[idx] = 1.0; // 咱们领域有部分问题特征值起始值为0，是否设置为从0开始，另外这个初始化的作用是什么?
     }
     ss_diag = ss_eval + (nevMax + 2 * block_size);
     ss_matA = ss_diag + (sizeV - sizeC);
@@ -1466,20 +1544,20 @@ static void GCG(void *A, void *B, double *eval, void **evec,
     int distance = (nevMax + 2 * block_size)                                  /* ss_eval */
                    + (nevInit + 2 * block_size)                               /* ss_diag */
                    + (nevInit + 2 * block_size) * (nevInit + 2 * block_size)  /* ss_matA */
-                   + (nevInit + 2 * block_size) * (nevInit + 1 * block_size); /* ss_evec */
+                   + (nevInit + 2 * block_size) * (nevInit + 1 * block_size); /* ss_evec */   // 为什么是 1*block_size?
     /* dbl_ws 包含 W 的部分 */
     dbl_ws = gcg_solver->dbl_ws + distance;
     gcg_solver->length_dbl_ws = (nevMax + 2 * block_size)                                     /* ss_eval */
-                                + 2 * (nevInit + 2 * block_size) * (nevInit + 2 * block_size) /* ss_matA ss_evec */
-                                + 10 * (nevInit + 2 * block_size)                             /* ss_diag WORK */
+                                + 2 * (nevInit + 2 * block_size) * (nevInit + 2 * block_size) /* ss_matA ss_evec */   // 从这里看1*block_size应该是写错了
+                                + 10 * (nevInit + 2 * block_size)                             /* ss_diag WORK */    // 为什么是 10*?
                                 + nevMax * block_size;                                        /* for orth */
-#if 0
-	ops_gcg->Printf ( "gcg_solver->length_dbl_ws = %d\n", gcg_solver->length_dbl_ws );
+#if DEBUG
+    ops_gcg->Printf ( "gcg_solver->length_dbl_ws = %d\n", gcg_solver->length_dbl_ws );
 #endif
 
 #if 1
     offsetP = gcg_solver->int_ws;
-    offsetW = offsetP + block_size + 3;
+    offsetW = offsetP + block_size + 3;  // 为什么是 +3?
     int_ws = offsetW + block_size + 3;
 #else
     int_ws = gcg_solver->int_ws;
@@ -1500,8 +1578,8 @@ static void GCG(void *A, void *B, double *eval, void **evec,
     time_gcg.linsol_time = 0.0;
 #endif
 
-#if 0
-	ops_gcg->Printf("initial X\n");
+#if DEBUG
+    ops_gcg->Printf("initial X\n");
 #endif
     /* 对 X 赋随机初值且 B-正交归一化 */
     InitializeX(V, ritz_vec, B, nevGiven);
@@ -1510,16 +1588,19 @@ static void GCG(void *A, void *B, double *eval, void **evec,
     int row, col;
 #endif
 
-#if 0
-	ops_gcg->Printf("ComputeRayleighRitz\n");
+#if DEBUG
+    ops_gcg->Printf("ComputeRayleighRitz\n");
 #endif
     ComputeRayleighRitz(ss_matA, ss_eval, ss_evec,
                         gcg_solver->compRR_tol, 0, ss_diag, A, V);
 
+    // 将未求解的特征值设置为已求解的最后一个特征值的值(特征值是从小到大求解的)
+    // 第一轮求解时，sizeC为0，因此求解出来的个数为sizeV = sizeX = nevInit
     for (idx = sizeV; idx < (nevMax + 2 * block_size); ++idx) {
         ss_eval[idx] = ss_eval[sizeV - 1];
     }
     /* 更新 ss_mat ss_evec */
+    // sizeC变了(收敛的特征向量多了)，因此将其余变量的内存空间依次后移，此时C为0，sizeV = sizeX = nevInit
     ss_matA = ss_diag + (sizeV - sizeC);
     ss_evec = ss_matA + (sizeV - sizeC) * (sizeV - sizeC);
 
@@ -1533,10 +1614,12 @@ static void GCG(void *A, void *B, double *eval, void **evec,
     *nevConv = (*nevConv) < nevMax ? (*nevConv) : nevMax;
     /* 用户希望收敛的特征对个数 */
     nev0 = *nevConv;
+    // 当前收敛的特征对个数
     *nevConv = 0;
     /* 收敛个数达到 nev 后将 P 和 W 部分扩充为 X 部分 */
     nev = nevInit < nevMax ? 2 * block_size : nev0;
     nev = nev < nev0 ? nev : nev0;
+    // 不进行收敛性判断的目的是什么？假设前几次均不会收敛，不进行收敛性判断是否可以提高效率？
     numIter = 0; /* numIter 取负值时, 小于等于零的迭代不进行判断收敛性 */
 #if PRINT_FIRST_UNCONV
     ops_gcg->Printf("------------------------------\n");
@@ -1558,14 +1641,17 @@ static void GCG(void *A, void *B, double *eval, void **evec,
 #if PRINT_FIRST_UNCONV
         ops_gcg->Printf("%d\t%d\n", numIter, *nevConv);
 #endif
+        // 判断新收敛的特征对个数是否大于sizeP + sizeW
         if (*nevConv >= nev) {
-            if (*nevConv >= nev0) {
+            if (*nevConv >= nev0) { // 当前收敛个数大于用户希望收敛的个数则退出循环，结束算法
                 break;
             } else {
                 /* Update sizeX */
                 nev += sizeP + sizeW;
                 nev = nev < nev0 ? nev : nev0;
+                // 将P和W部分扩充为X部分
                 sizeX += sizeP + sizeW;
+                // sizeX最大只能为nevMax
                 sizeX = sizeX < nevMax ? sizeX : nevMax;
                 /* 将 P 和 W 部分写入 ritz_vec */
                 start[0] = startN;
@@ -1794,6 +1880,18 @@ void EigenSolverSetup_GCG(
     return;
 }
 
+/**
+ * @brief 给GCGE算法创建需要的工作空间(分配内存)
+ * 
+ * @param nevInit 初始选取的X矩阵列数
+ * @param nevMax 需要求解的最大特征值个数
+ * @param block_size P&W矩阵块的列数
+ * @param mat A矩阵
+ * @param mv_ws 
+ * @param dbl_ws double类型工作空间指针
+ * @param int_ws int类型工作空间指针
+ * @param ops 操作集
+ */
 void EigenSolverCreateWorkspace_GCG(
     int nevInit, int nevMax, int block_size, void *mat,
     void ***mv_ws, double **dbl_ws, int **int_ws,

@@ -22,7 +22,7 @@ typedef struct GCGSolver_ {
 	void   **evec;	// 特征向量二维数组，分配向量个数 nevMax + block_size
 	int    nevMax;  // 整个任务所要求的特征对个数
 	int   multiMax; 
-	double gapMin;
+	double gapMin; // 两个特征值间认为不是重根的最小间隔
 	int    nevInit; // 初始选取X矩阵的列数
 	int   nevGiven; // 当前批次求解前，收敛特征对的总个数
 	int    nevConv;	// 当前批次求解后，收敛特征对的总个数
@@ -32,23 +32,37 @@ typedef struct GCGSolver_ {
 	int    numIter; // 当前迭代次数
 	int    sizeV;	// V矩阵的理论列数 
 	void   **mv_ws[4]; // 多向量内存空间 0: V,
-	double *dbl_ws;    // 双精度内存空间，2*sizeV*sizeV + 2*sizeV, 用于存储子空间投影问题的矩阵和对角元，求得的特征向量和特征值
+	double *dbl_ws;    // 双精度内存空间，2*sizeV*sizeV + 2*sizeV, 用于存储子空间投影问题的矩阵和对角元，求得的特征向量和特征值，顺序：[特征值 对角元 矩阵 特征向量] 
 	int *int_ws;	   // 整型内存空间
 	int  length_dbl_ws;// 双精度内存空间数组长度
-	int  user_defined_multi_linear_solver;	
-	int  check_conv_max_num;
-	char initX_orth_method[8] ; int    initX_orth_block_size; 
-	int  initX_orth_max_reorth; double initX_orth_zero_tol;
-	char compP_orth_method[8] ; int    compP_orth_block_size; 
-	int  compP_orth_max_reorth; double compP_orth_zero_tol;
-	char compW_orth_method[8] ; int    compW_orth_block_size; 
-	int  compW_orth_max_reorth; double compW_orth_zero_tol;
-	int  compW_cg_max_iter    ; double compW_cg_rate; 
-	double compW_cg_tol       ; char   compW_cg_tol_type[8];
-	int  compW_cg_auto_shift  ; double compW_cg_shift;
-	int  compW_cg_order       ;
-	int    compRR_min_num     ; double compRR_min_gap; 
-	double compRR_tol; /*tol for dsyevx_ */	
+	int  check_conv_max_num; // 单次检查收敛性的最大特征对个数
+	
+	char initX_orth_method[8] ; 
+	int    initX_orth_block_size; 
+	int  initX_orth_max_reorth; 
+	double initX_orth_zero_tol;
+	char compP_orth_method[8] ; 
+	int    compP_orth_block_size; 
+	int  compP_orth_max_reorth; 
+	double compP_orth_zero_tol;
+	char compW_orth_method[8] ; 
+	int    compW_orth_block_size; 
+	int  compW_orth_max_reorth; 
+	double compW_orth_zero_tol;
+
+	int  user_defined_multi_linear_solver;	// 指定用户自定义的线性方程组求解器，目前仅支持 0： PCG
+	int  compW_cg_max_iter    ; 
+	double compW_cg_rate; 
+	double compW_cg_tol       ; 
+	char   compW_cg_tol_type[8]; // 计算W是用的CG法中收敛容差的判断方式(abs or rel)
+	int  compW_cg_auto_shift  ; // 是否自动按照内置公式计算shift
+	double compW_cg_shift;      // 王博士认为这个成员变量是多余的，没有实际作用
+	int  compW_cg_order       ; // 用于是否调用ComputeW12（冗余的函数）的判断，可删去
+
+	int    compRR_min_num     ; 
+	double compRR_min_gap; 
+	double compRR_tol; 			/*tol for dsyevx_ */	
+	
 } GCGSolver;
 
 void EigenSolverSetup_GCG(

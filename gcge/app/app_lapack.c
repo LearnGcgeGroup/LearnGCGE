@@ -558,11 +558,11 @@ static void MultiVecAxpby(double alpha, LAPACKVEC *x,
     // 当y矩阵是连续存储时（行数等于实际存储间距）
     if (y->nrows == y->ldd) {
         /* 批量处理所有列的数据 */
-        length = y->nrows * ncols;
-        destin = y->data + y->ldd * (start[1]);
+        length = y->nrows * ncols;              // 矩阵的元素个数
+        destin = y->data + y->ldd * (start[1]); // destin指向矩阵存储所对应的起始位置
         // 处理beta系数：清零或缩放现有y值，结果储存回原地址
         if (beta == 0.0) {
-            memset(destin, 0, length * sizeof(double));
+            memset(destin, 0, length * sizeof(double)); // 不需要scaling，直接清空矩阵
         } else {
             if (beta != 1.0) {
                 // 计算beta * y

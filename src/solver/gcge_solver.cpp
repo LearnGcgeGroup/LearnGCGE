@@ -72,8 +72,8 @@ int eigenSolverGCG(void* A, void* B, std::vector<double>& eigenvalue, std::vecto
     ops->MultiVecSetRandomValue(evec, 0, nevMax, ops);
 
     void** gcg_mv_ws[4];
-    double* dbl_ws;
-    int* int_ws;
+    double* dbl_ws; // double类型数据的工作空间
+    int* int_ws; // int类型数据的工作空间
     /* 设定 GCG 的工作空间 nevMax+2*block_size, 
 	 * block_size, block_size, block_size */
     EigenSolverCreateWorkspace_GCG(nevInit, nevMax, block_size, A, gcg_mv_ws, &dbl_ws, &int_ws, ops);

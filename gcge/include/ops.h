@@ -61,6 +61,12 @@ typedef struct OPS_ {
 	/* y = mat' * x */
 	void (*MatTransDotVec) (void *mat, void *x, void *y, struct OPS_ *ops);
 	/* multi-vec */
+    /**
+     * @brief 通过num_vec与src_mat创建multi_vec，并给其分配内存空间
+     * @param multi_vec 目标多维向量
+     * @param num_vec (入参) 用于设置multi_vec的列数(向量的个数)
+     * @param src_mat (入参) 用于设置multi_vec的行数(每一维向量的长度)
+     */
 	void (*MultiVecCreateByMat)      (void ***multi_vec, int num_vec, void *src_mat, struct OPS_ *ops);
 	void (*MultiVecCreateByVec)      (void ***multi_vec, int num_vec, void *src_vec, struct OPS_ *ops);
 	void (*MultiVecCreateByMultiVec) (void ***multi_vec, int num_vec, void **src_mv, struct OPS_ *ops);
@@ -72,32 +78,141 @@ typedef struct OPS_ {
 	void (*MultiVecLocalInnerProd) (char nsdIP, 
 			void **x, void **y, int is_vec, int *start, int *end, 
 			double *inner_prod, int ldIP, struct OPS_ *ops);
+    /**
+     * @brief 计算多个向量的内积
+     * 
+     * 该函数是对MultiVecLocalInnerProd的封装，用于计算多个向量的内积。
+     * 适用于需要分块计算或并行计算的情景，通过start/end参数指定计算范围。
+     * 
+     * @param[in] nsdIP     字符参数，指定内积存储方式（例如'S'表示对称存储）
+     * @param[in] x         输入向量/矩阵
+     * @param[in] y         输入向量/矩阵
+     * @param[in] is_vec    向量模式标志位（0-矩阵模式，1-向量模式）
+     * @param[in] start     计算区间的起始索引数组
+     * @param[in] end       计算区间的结束索引数组
+     * @param[out] inner_prod 输出内积结果数组（需预先分配内存）
+     * @param[in] ldIP      inner_prod数组的leading dimension
+     * @param[in] ops       运算控制参数结构体指针
+     * 
+     * @note 实际计算工作由MultiVecLocalInnerProd函数完成
+     * @warning start/end数组长度应与计算分块数量匹配
+     */
 	void (*MultiVecInnerProd)      (char nsdIP, 
 			void **x, void **y, int is_vec, int *start, int *end, 
 			double *inner_prod, int ldIP, struct OPS_ *ops);
+    /**
+     * @brief 为多向量中的指定列范围设置随机值
+     *
+     * 该函数为LAPACKVEC结构中的指定列范围[start, end)填充随机生成的双精度浮点数。
+     * 生成的数值范围为[0.0, 1.0)，使用标准库rand()函数生成。
+     *
+     * @param x     目标向量/矩阵结构指针，数据按列存储
+     * @param start 起始列索引（包含）
+     * @param end   结束列索引（不包含）
+     * @param ops   操作接口
+     */
 	void (*MultiVecSetRandomValue) (void **multi_vec, 
 			int    start , int  end , struct OPS_ *ops);
-    /* y = alpha x + beta y */
-	void (*MultiVecAxpby)          (
-			double alpha , void **x , double beta, void **y, 
-			int    *start, int  *end, struct OPS_ *ops);
+    /**
+     * @brief 计算多列向量的线性组合：y = alpha * x + beta * y
+     *
+     * 对指定列范围内的向量进行BLAS风格的axpby操作，支持矩阵列向量批量处理。
+     * 当beta=0时执行向量初始化+累加操作，当x=NULL时仅执行向量缩放操作。
+     * 
+     * @param alpha 标量系数，作用于x向量
+     * @param x 输入向量/矩阵。当为NULL时仅对y执行beta缩放操作
+     * @param beta 标量系数，作用于y向量
+     * @param y 输入输出向量/矩阵。操作结果将直接修改此数据
+     * @param start 二维数组，start[0]表示x的起始列，start[1]表示y的起始列
+     * @param end 二维数组，end[0]表示x的结束列，end[1]表示y的结束列
+     * @param ops 操作接口
+     */
+    void (*MultiVecAxpby) (
+            double alpha , void **x , double beta, void **y, 
+            int    *start, int  *end, struct OPS_ *ops);
 	/* y = x coef + y diag(beta) */
-	void (*MultiVecLinearComb)     (
-			void   **x   , void **y , int is_vec, 
-			int    *start, int  *end, 
-			double *coef , int  ldc , 
-			double *beta , int  incb, struct OPS_ *ops);
-	void (*MatDotMultiVec)      (void *mat, void **x, void **y, 
+    /**
+    * @brief 执行向量/矩阵的线性组合计算 y = beta*y + x*coef
+    * 
+    * @param[in] x       输入矩阵/向量，LAPACKVEC结构指针，NULL表示不参与计算
+    * @param[in,out] y   输入输出矩阵/向量，LAPACKVEC结构指针，存储计算结果
+    * @param[in] is_vec  保留参数
+    * @param[in] start   二维起始坐标数组，start[0]为x向量的起始列，start[1]为y向量的起始列
+    * @param[in] end     二维结束坐标数组，end[0]为x向量的结束列，end[1]为y向量的结束列
+    * @param[in] coef    系数矩阵指针，与x矩阵相乘的系数
+    * @param[in] ldc     coef矩阵的leading dimension
+    * @param[in] beta    y的缩放系数指针，NULL表示不进行缩放
+    * @param[in] incb    beta系数递增步长，0表示使用统一系数
+    * @param[in] ops     操作接口
+    * 
+    * @note 实际运算通过dgemm/dscal等BLAS函数完成
+    */
+    void (*MultiVecLinearComb)(
+        void **x, void **y, int is_vec,
+        int *start, int *end,
+        double *coef, int ldc,
+        double *beta, int incb, struct OPS_ *ops);
+
+    /**
+     * @brief 计算矩阵块与向量块的乘积，并将结果累加到目标向量块中 y = mat * x
+     *
+     * @param mat   输入矩阵指针。若为NULL，则执行向量块复制操作而非矩阵乘法
+     * @param x     输入向量指针，要求数据连续存储（nrows == ldd）
+     * @param y     输出向量指针，要求数据连续存储（nrows == ldd）
+     * @param start 起始索引数组，start[0]为x向量的起始列，start[1]为y向量的起始列
+     * @param end   结束索引数组，end[0]为x向量的结束列，end[1]为y向量的结束列
+     * @param ops   操作接口
+     */
+    void (*MatDotMultiVec) (void *mat, void **x, void **y, 
 			int  *start, int *end, struct OPS_ *ops);
 	void (*MatTransDotMultiVec) (void *mat, void **x, void **y, 
 			int  *start, int *end, struct OPS_ *ops);
-	/* qAp = Qt A P */
-	void (*MultiVecQtAP)        (char ntsA, char ntsdQAP, 
+    /**
+     * @brief 计算密集矩阵运算 qAp = Q^T * A * P 或相关变体，结果存入 qAp 数组
+     * 
+     * @param ntsA         矩阵A的存储标识符，'S'表示对称矩阵（自动转为'L'下三角），其他字符见DenseMatQtAP说明
+     * @param ntsdQAP      运算模式标识符，'T'表示需要对结果进行特殊转置存储
+     * @param mvQ          输入矩阵Q的向量结构体指针
+     * @param matA         输入矩阵A的结构体指针（可为NULL）
+     * @param mvP          输入矩阵P的向量结构体指针
+     * @param is_vec       指示是否为向量
+     * @param start        二维数组指针，指定列起始索引[start[0], start[1]]
+     * @param end          二维数组指针，指定列结束索引[end[0], end[1]]
+     * @param qAp          输出结果存储数组指针
+     * @param ldQAP        qAp数组的行主维度（leading dimension）
+     * @param vec_ws       工作空间向量指针，用于临时存储
+     * @param ops          操作接口
+     */
+	void (*MultiVecQtAP) (char ntsA, char ntsdQAP, 
 			void **mvQ  , void   *matA  , void   **mvP, int is_vec, 
 			int  *start , int    *end   , double *qAp , int ldQAP , 
 			void **mv_ws, struct OPS_ *ops);
 	/* Dense matrix vector ops */ 
 	struct OPS_ *lapack_ops; /* ���ܾ��������Ĳ��� */
+    /* matC = alpha*matQ^{\top}*matA*matP + beta*matC 
+    * dbl_ws: nrowsA*ncolsC */
+    /**
+     * @brief 计算稠密矩阵运算 C = alpha * Q^T * A * P + beta * C
+     *          支持分块处理、对称矩阵优化及并行计算
+     *
+     * @param ntluA   A矩阵的三角类型('L'下三角/'U'上三角)或普通矩阵('N')
+     * @param nsdC    C矩阵的存储类型('D'对角/'S'对称/'N'普通)
+     * @param nrowsA  矩阵A的行数
+     * @param ncolsA  矩阵A的列数
+     * @param nrowsC  结果矩阵C的行数
+     * @param ncolsC  结果矩阵C的列数
+     * @param alpha   前乘标量系数
+     * @param matQ    矩阵Q的数据指针
+     * @param ldQ     Q矩阵的leading dimension
+     * @param matA    矩阵A的数据指针(可为NULL触发特殊处理)
+     * @param ldA     A矩阵的leading dimension
+     * @param matP    矩阵P的数据指针
+     * @param ldP     P矩阵的leading dimension
+     * @param beta    后乘标量系数
+     * @param matC    结果矩阵C的数据指针
+     * @param ldC     C矩阵的leading dimension
+     * @param dbl_ws  双精度工作空间指针
+     */
 	void (*DenseMatQtAP) (char ntluA, char nsdC,
 			int nrowsA, int ncolsA, /* matA �������� */
 			int nrowsC, int ncolsC, /* matC �������� */

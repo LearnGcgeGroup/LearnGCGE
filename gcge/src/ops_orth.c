@@ -505,7 +505,7 @@ static void OrthBinary(void **x,int start_x, int *end_x, void *B, char orth_self
 	return;
 }
 
-// 二分块GramSchmidt正交化
+// 二分递归GramSchmidt正交化
 // Input: 
 // 		x 矩阵	B 矩阵
 //		start_x 起始位置
