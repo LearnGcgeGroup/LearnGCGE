@@ -58,7 +58,7 @@ target_link_libraries(GCGE
     PUBLIC
         ${MPI_C_LIBRARIES}  # Link MPI libraries
         OpenMP::OpenMP_C
-
+        petsc
 )
 
 set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/shared/lib)

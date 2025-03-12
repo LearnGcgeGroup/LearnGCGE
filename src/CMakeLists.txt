@@ -24,6 +24,7 @@ target_link_libraries(test
         GCGE
         ${MPI_C_LIBRARIES}  # Link MPI libraries for the test executable
         OpenMP::OpenMP_CXX
+        petsc
 )
 
 # 添加自定义命令来拷贝 GCGE 库到 test 可执行文件所在的目录

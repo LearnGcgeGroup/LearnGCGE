@@ -12,9 +12,12 @@ if(NOT CMAKE_BUILD_TYPE)
     "MinSizeRel" "RelWithDebInfo")
 endif()
 
-# include
-set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/config/)
+# 添加 CMake 目录
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake ${CMAKE_CURRENT_SOURCE_DIR}/config)
+
 include(linux_mpicc)
+# 载入 PETSc 配置
+include(PETScConfig)
 
 add_subdirectory(gcge)  # 添加 gcge 库的子目录
 add_subdirectory(src)   # 添加 src 可执行文件的子目录
