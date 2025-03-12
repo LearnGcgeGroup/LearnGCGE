@@ -19,6 +19,10 @@
 extern "C"{
 #endif
 #include "mmio.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
 void exclusive_scan(MAT_PTR_TYPE* input, int length)
 {
     if (length == 0 || length == 1) return;

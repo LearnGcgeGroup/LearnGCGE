@@ -22,6 +22,7 @@ extern "C" {
     #include "ops_eig_sol_gcg.h"
     #include "ops_lin_sol.h"
     #include "ops_orth.h"
+    // #include "mmloader.h"
 }
 
 class InputReadTool {
@@ -37,6 +38,15 @@ public:
      * @return GcgeErrCode 错误码
      */
     static GcgeErrCode ReadCcsFromMtx(CCSMAT *ccs_matA, char* file_matrix);
+
+    /**
+     * @brief 读取MTX文件生成CCS格式的矩阵
+     * 
+     * @param ccs_matA 矩阵地址
+     * @param file_matrix 文件路径
+     * @return GcgeErrCode 错误码
+     */
+    static GcgeErrCode ReadPetscMatFromMtx(CCSMAT *ccs_matA, char* file_matrix);
 
     /**
      * @brief 读取用户设置的求解参数txt文档

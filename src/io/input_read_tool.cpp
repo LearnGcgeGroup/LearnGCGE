@@ -21,6 +21,19 @@ GcgeErrCode InputReadTool::ReadCcsFromMtx(CCSMAT* ccs_mat, char* file_matrix) {
     return GCGE_SUCCESS;
 }
 
+GcgeErrCode InputReadTool::ReadPetscMatFromMtx(CCSMAT* ccs_mat, char* file_matrix) {
+    if (ccs_mat == NULL) {
+        std::cerr << "Error: ccs_mat is NULL." << std::endl;
+        return GCGE_ERR_NULLPTR;
+    }
+    if (file_matrix == NULL) {
+        std::cerr << "Error: file_matrix is NULL." << std::endl;
+        return GCGE_ERR_NULLPTR;
+    }
+    CreateCCSFromMTX(ccs_mat, file_matrix);
+    return GCGE_SUCCESS;
+}
+
 GcgeErrCode InputReadTool::readUserParam(GcgeParam& param, ExtractMethod& method, std::string paramFileName) {
     if (paramFileName.empty()) {
         std::cerr << "Error: paramFileName is empty." << std::endl;

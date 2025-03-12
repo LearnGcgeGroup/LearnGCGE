@@ -12,6 +12,12 @@
 #include "io/read_user_param.h"
 #include "io/input_read_tool.h"
 #include "error_code.h"
+#ifndef PETSC_FUNCTION_NAME_CXX
+#define PETSC_FUNCTION_NAME_CXX __func__
+#endif
+#define PETSC_CXX_RESTRICT __restrict
+
+#include <petscmat.h>
 
 extern "C" {
 #include "app_ccs.h"
