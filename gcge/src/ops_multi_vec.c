@@ -265,7 +265,9 @@ void DefaultMultiVecLocalInnerProd(char nsdIP, void **x, void **y, int is_vec, i
         }
     } else if (nsdIP == 'D') { // // 对角模式处理
         assert(nrows == ncols);
-        /* 仅计算主对角线上的内积 */
+        /* 仅计算主对角线上的内积,
+         * 即对于[a1,a2],[b1,b2],只计算a1*b1,a2*b2,而不计算a1*b2
+          */
         for (col = 0; col < ncols; ++col) {
             ops->GetVecFromMultiVec(y, start[1] + col, &vec_y, ops);
             ops->GetVecFromMultiVec(x, start[0] + col, &vec_x, ops);

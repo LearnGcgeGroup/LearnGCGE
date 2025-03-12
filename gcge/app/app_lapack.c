@@ -16,8 +16,8 @@
  * @brief 计算稠密矩阵运算 C = alpha * Q^T * A * P + beta * C
  *          支持分块处理、对称矩阵优化及并行计算
  *
- * @param ntluA   A矩阵的三角类型('L'下三角/'U'上三角)或普通矩阵('N')
- * @param nsdC    C矩阵的存储类型('D'对角/'S'对称/'N'普通)
+ * @param ntluA   A矩阵的三角类型('L'下三角/'U'上三角)或普通矩阵('S'或其他)
+ * @param nsdC    C矩阵的存储类型('D'对角/'S'对称/其他 普通)
  * @param nrowsA  矩阵A的行数
  * @param ncolsA  矩阵A的列数
  * @param nrowsC  结果矩阵C的行数
@@ -446,7 +446,7 @@ static void MultiVecView(LAPACKVEC *x, int start, int end, struct OPS_ *ops) {
  * 该函数通过调用DenseMatQtAP函数，对输入向量/矩阵的指定子块进行运算，
  * 计算结果矩阵的局部内积。主要用于处理分布式矩阵的局部块运算。
  * 
- * @param[in] nsdIP     字符参数，指定内积存储方式（例如'S'表示对称存储）
+ * @param[in] nsdIP     字符参数，指定内积存储方式,主要用于传入至DenseMatQtAP('D'对角/'S'对称/'N'普通)
  * @param[in] x         输入矩阵/向量x（对应运算中的Q矩阵）
  * @param[in] y         输入矩阵/向量y（对应运算中的P矩阵）
  * @param[in] is_vec    向量模式标识

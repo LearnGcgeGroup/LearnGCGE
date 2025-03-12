@@ -157,20 +157,21 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
     double rate = bpcg->rate, tol = bpcg->tol;
     double alpha, beta, *rho1, *rho2, *pTw, *norm_b, *init_res, *last_res, *destin;
     void **mv_r, **mv_p, **mv_w;
-    mv_r = bpcg->mv_ws[0]; // 余量向量
-    mv_p = bpcg->mv_ws[1];
-    mv_w = bpcg->mv_ws[2];
+    mv_r = bpcg->mv_ws[0]; // 余量向量 r
+    mv_p = bpcg->mv_ws[1]; // 搜索方向向量 p
+    mv_w = bpcg->mv_ws[2]; // 预处理后的向量 A * p
     assert(end_bx[0] - start_bx[0] == end_bx[1] - start_bx[1]);
-    num_unconv = end_bx[0] - start_bx[0];
-    norm_b = bpcg->dbl_ws;
-    rho1 = norm_b + num_unconv;
-    rho2 = rho1 + num_unconv;
-    pTw = rho2 + num_unconv;
-    init_res = pTw + num_unconv;
-    last_res = init_res + num_unconv;
-    unconv = bpcg->int_ws;
-    block = unconv + num_unconv;
+    num_unconv = end_bx[0] - start_bx[0]; // 最初预设所有向量都未受敛
+    norm_b = bpcg->dbl_ws;                //double工作空间的地址赋给norm_b，用来储存b的范数
+    rho1 = norm_b + num_unconv;           // rho1 = ||b|| + num_unconv
+    rho2 = rho1 + num_unconv;             // rho2 = ||b|| + 2*num_unconv
+    pTw = rho2 + num_unconv;              // TODO:为什么要这样初始化？ pTw = ||b|| + 3* num_unconv
+    init_res = pTw + num_unconv;          // last_res = ||b|| + 4*num_unconv
+    last_res = init_res + num_unconv;     // last_res = ||b|| + 5*num_unconv
+    unconv = bpcg->int_ws;                // int工作空间的地址赋给unconv,用来存储未收敛向量的索引
+    block = unconv + num_unconv;          // 指向int_ws工作空间的起始位置偏移num_unconv 个int的位置
 
+// 如果需要记录用时
 #if TIME_BPCG
     time_bpcg.allreduce_time = 0.0;
     time_bpcg.axpby_time = 0.0;
@@ -178,8 +179,8 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
     time_bpcg.matvec_time = 0.0;
 #endif
 
-    /* ���� norm of rhs */
-    if (0 == strcmp("rel", bpcg->tol_type)) {
+    /*计算右端项b的范数*/
+    if (0 == strcmp("rel", bpcg->tol_type)) { //如果误差形式为相对误差
 #if TIME_BPCG
         time_bpcg.innerprod_time -= ops->GetWtime();
 #endif
@@ -187,36 +188,39 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
         end[0] = end_bx[0];
         start[1] = start_bx[0];
         end[1] = end_bx[0];
+        // 计算向量内积，将mv_b的内积存储在norm_b中
+        // nsdIP设置为'D'是因为对于[a1,a2],[a1,a2],只计算a1*a1,a2*a2,而不计算a1*a2
         ops->MultiVecInnerProd('D', mv_b, mv_b, 0, start, end, norm_b, 1, ops);
 #if TIME_BPCG
         time_bpcg.innerprod_time += ops->GetWtime();
 #endif
         for (idx = 0; idx < num_unconv; ++idx) {
-            norm_b[idx] = sqrt(norm_b[idx]);
+            norm_b[idx] = sqrt(norm_b[idx]); // 逐个计算sqrt(b^T*b)
         }
-    } else if (0 == strcmp("user", bpcg->tol_type)) {
+    } else if (0 == strcmp("user", bpcg->tol_type)) { //如果误差形式为用户自定义
         /* user defined norm_b */
         for (idx = 0; idx < num_unconv; ++idx) {
-            norm_b[idx] = fabs(norm_b[idx]);
+            norm_b[idx] = fabs(norm_b[idx]); // 计算绝对值
             //ops->Printf("%e\n",norm_b[idx]);
         }
     } else {
-        for (idx = 0; idx < num_unconv; ++idx) {
-            norm_b[idx] = 1.0;
+        for (idx = 0; idx < num_unconv; ++idx) { // 如果误差形式为绝对误差
+            norm_b[idx] = 1.0;                   // 初始化为1
         }
     }
 
 #if TIME_BPCG
     time_bpcg.matvec_time -= ops->GetWtime();
 #endif
-    /* �����ʼ���� */
+    /* 计算初始残差 r = b - Ax */
     start[0] = start_bx[1];
     end[0] = end_bx[1];
     start[1] = 0;
     end[1] = num_unconv;
-    if (bpcg->MatDotMultiVec != NULL) {
-        bpcg->MatDotMultiVec(mv_x, mv_r, start, end, mv_p, 0, ops);
-    } else {
+    // 计算 A*x
+    if (bpcg->MatDotMultiVec != NULL) {                             // 如果求解器带了自定义的MatDotMultiVec函数
+        bpcg->MatDotMultiVec(mv_x, mv_r, start, end, mv_p, 0, ops); // TODO 没有把矩阵传进去,为什么要传入mv_p?bpcg->MatDotMultiVec怎么定义的
+    } else {                                                        // 否则调用默认的MatDotMultiVec函数，y = Ax, 结果存储在mv_r中
         ops->MatDotMultiVec(mat, mv_x, mv_r, start, end, ops);
     }
 
@@ -231,6 +235,8 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
     end[0] = end_bx[0];
     start[1] = 0;
     end[1] = num_unconv;
+    //TODO 上面如果调用的是bpcg->MatDotMultiVec？
+    // 对于未受敛的向量，计算r = b - r.这里mv_r存的是上面调用默认的MatDotMultiVec函数记算出来的A*x
     ops->MultiVecAxpby(1.0, mv_b, -1.0, mv_r, start, end, ops);
 #if TIME_BPCG
     time_bpcg.axpby_time += ops->GetWtime();
@@ -239,26 +245,28 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
 #if TIME_BPCG
     time_bpcg.innerprod_time -= ops->GetWtime();
 #endif
+    /*计算初始 ρ = r^T r 并检查是否满足收敛条件*/
     start[0] = 0;
     end[0] = num_unconv;
     start[1] = 0;
     end[1] = num_unconv;
+    // 计算残差r的范数，存到rho2中
     ops->MultiVecInnerProd('D', mv_r, mv_r, 0, start, end, rho2, 1, ops);
 #if TIME_BPCG
     time_bpcg.innerprod_time += ops->GetWtime();
 #endif
     for (idx = 0; idx < num_unconv; ++idx) {
-        init_res[idx] = sqrt(rho2[idx]);
+        init_res[idx] = sqrt(rho2[idx]); // 逐个计算sqrt(r^T*r)
     }
     /* �ж������� */
     pre_num_unconv = num_unconv;
     num_unconv = 0;
     for (idx = 0; idx < pre_num_unconv; ++idx) {
-        if (init_res[idx] > tol * norm_b[idx]) {
-            unconv[num_unconv] = idx;
+        if (init_res[idx] > tol * norm_b[idx]) { // 逐个判断是否有sqrt(r^T*r) > tol * ||b||,tol为容差限度
+            unconv[num_unconv] = idx;            // 如果满足则说明未受敛，将未受敛向量索引存入unconv.
             rho2[num_unconv] = rho2[idx];
             ++num_unconv;
-        }
+        } // 最终num_unconv更新为此次检查后未受敛的向量个数
     }
 #if DEBUG
     if (num_unconv > 0) {
@@ -268,22 +276,25 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
     }
 #endif
     niter = 0;
-    while (niter < max_iter && num_unconv > 0) {
+    /*主循环*/
+    while (niter < max_iter && num_unconv > 0) { // 循环之迭代次数达到上限/所有向量都收敛
+                                                 /*把未知相邻的未受敛向量分到同一个块*/
         num_block = 0;
         block[num_block] = 0;
         ++num_block;
         for (idx = 1; idx < num_unconv; ++idx) {
-            if (unconv[idx] - unconv[idx - 1] > 1) {
-                block[num_block] = idx;
+            if (unconv[idx] - unconv[idx - 1] > 1) { // 如果未受敛的两个向量不是相邻的
+                block[num_block] = idx;              // 就进行分块，将这个idx作为下一个块的起始位置存入block数组中
                 ++num_block;
             }
-        }
-        block[num_block] = num_unconv;
+        } // 最终num_block表示块的数量
+        block[num_block] = num_unconv; // 将最后一个块的结束位置存入block数组中
         /* for each block */
         destin = pTw;
-        for (idx = 0; idx < num_block; ++idx) {
-            length = block[idx + 1] - block[idx];
+        for (idx = 0; idx < num_block; ++idx) {   // 对每一个块
+            length = block[idx + 1] - block[idx]; // 当前处理的块有多少个向量
             for (col = block[idx]; col < block[idx + 1]; ++col) {
+                /*更新搜索方向 p*/
                 if (niter == 0)
                     beta = 0.0;
                 else
@@ -296,6 +307,7 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
                 end[0] = unconv[col] + 1;
                 start[1] = unconv[col];
                 end[1] = unconv[col] + 1;
+                // 如果是第一次迭代，则将搜索方向初始化为r;否则，设置为r+rho2[col] / rho1[col]*p
                 ops->MultiVecAxpby(1.0, mv_r, beta, mv_p, start, end, ops);
 #if TIME_BPCG
                 time_bpcg.axpby_time += ops->GetWtime();
@@ -305,6 +317,7 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
             time_bpcg.matvec_time -= ops->GetWtime();
 #endif
             //compute the vector w = A*p
+            /*计算w = A*p*/
             start[0] = unconv[block[idx]];
             end[0] = unconv[block[idx + 1] - 1] + 1;
             start[1] = unconv[block[idx]];
@@ -323,25 +336,28 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
             time_bpcg.innerprod_time -= ops->GetWtime();
 #endif
             //compute the value pTw = p^T * w
+            // 计算pTw = p^T * w=p^T *A*p，存在destin指向的地址
             ops->MultiVecLocalInnerProd('D', mv_p, mv_w, 0, start, end, destin, 1, ops);
 #if TIME_BPCG
             time_bpcg.innerprod_time += ops->GetWtime();
 #endif
-            destin += length;
+            destin += length; // destin指向下一个块对应的地址
         }
 
 #if OPS_USE_MPI
 #if TIME_BPCG
         time_bpcg.allreduce_time -= ops->GetWtime();
 #endif
+        // 确保每个进程中 pTw 数组的各元素都包含了所有进程对应元素的总和
         MPI_Allreduce(MPI_IN_PLACE, pTw, num_unconv, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 #if TIME_BPCG
         time_bpcg.allreduce_time += ops->GetWtime();
 #endif
 #endif
-
+        /* 计算alpha = rho / (p^T * A * p)*/
         //set rho1 as rho2
         int inc = 1;
+        // 把rho2赋值给rho1
         dcopy(&num_unconv, rho2, &inc, rho1, &inc);
         /* for each block */
         destin = rho2;
@@ -354,6 +370,7 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
                 time_bpcg.axpby_time -= ops->GetWtime();
 #endif
                 //compute the new solution x = alpha * p + x
+                /*迭代新的解 x = x + alpha * p */
                 start[0] = unconv[col];
                 end[0] = unconv[col] + 1;
                 start[1] = start_bx[1] + unconv[col];
@@ -364,6 +381,8 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
                 end[0] = unconv[col] + 1;
                 start[1] = unconv[col];
                 end[1] = unconv[col] + 1;
+                // 计算新的残差: r = - alpha*A*p + r
+                // 原来的r = b - A*x,更新之后只用继续减去alpha*A*p
                 ops->MultiVecAxpby(-alpha, mv_w, 1.0, mv_r, start, end, ops);
 #if TIME_BPCG
                 time_bpcg.axpby_time += ops->GetWtime();
@@ -373,10 +392,12 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
             time_bpcg.innerprod_time -= ops->GetWtime();
 #endif
             //compute the new rho2
+            // 对每个块计算新的rho2
             start[0] = unconv[block[idx]];
             end[0] = unconv[block[idx + 1] - 1] + 1;
             start[1] = unconv[block[idx]];
             end[1] = unconv[block[idx + 1] - 1] + 1;
+            // rho2 = r^T * r。此时destin指向的是rho2数组的存储地址
             ops->MultiVecLocalInnerProd('D', mv_r, mv_r, 0, start, end, destin, 1, ops);
 #if TIME_BPCG
             time_bpcg.innerprod_time += ops->GetWtime();
@@ -397,6 +418,7 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
             //last_res[unconv[idx]] = (1.1*last_res[unconv[idx]])<sqrt(rho2[idx])?1e-16:sqrt(rho2[idx]);
             //}
             //else {
+            // 计算新的残差范数 ||r|| = sqrt(r^T * r)
             last_res[unconv[idx]] = sqrt(rho2[idx]);
             //}
         }
@@ -409,13 +431,16 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
         num_unconv = 0;
         for (idx = 0; idx < pre_num_unconv; ++idx) {
             col = unconv[idx];
+            // 判断是否满足终止条件
+            // 需要满足两个条件：1.残差小于rate*初始残差，2.残差小于tol*||b||
+            // TODO:为什么需要满足第一个条件？
             if ((last_res[col] > rate * init_res[col]) && (last_res[col] > tol * norm_b[col])) {
                 unconv[num_unconv] = col;
                 /* �轫 rho1 rho2 δ��������˳��ǰ�� */
                 rho1[num_unconv] = rho1[idx];
                 rho2[num_unconv] = rho2[idx];
                 ++num_unconv;
-            }
+            } // 更新未受敛的向量个数
         }
         //update the iteration time
 
@@ -428,6 +453,7 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
         }
 #endif
     }
+    // 存储最终迭代次数和残差
     if (niter > 0) {
         bpcg->niter = niter;
         bpcg->residual = last_res[unconv[0]];
