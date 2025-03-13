@@ -145,9 +145,7 @@ void LinearSolverSetup_PCG(int max_iter, double rate, double tol,
  */
 void BlockPCG(void *mat, void **mv_b, void **mv_x,
               int *start_bx, int *end_bx, struct OPS_ *ops) {
-    // 初始化了一个结构体BlockPCGSolver，主要用来储存参数值，分配工作空间和绑定MatDotMultiVec计算函数
-    /*Q: 为什么要调用ops->multi_linear_solver_workspace，而不是直接用BlockPCGSolver *bpcg？
-	A：multi_linear_solver_workspace 是一个 void* 指针。这样可以存储任意类型的求解器工作空间，不仅限于 BlockPCGSolver。如果未来需要支持其他求解器，只需要将相应的工作空间赋值给这个字段，而调用代码无需做修改*/
+    // 接收了 ops->multi_linear_solver_workspace 指向的已有工作空间。
     BlockPCGSolver *bpcg = (BlockPCGSolver *)ops->multi_linear_solver_workspace; // 使用前要保证ops->multi_linear_solver_workspace已经初始化，不能指向NULL
     /*niter：当前迭代次数		max_iter：最大迭代次数
 	num_block：未收敛向量的块数		num_unconv：未收敛向量个数
@@ -161,15 +159,19 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
     mv_p = bpcg->mv_ws[1]; // 搜索方向向量 p
     mv_w = bpcg->mv_ws[2]; // 预处理后的向量 A * p
     assert(end_bx[0] - start_bx[0] == end_bx[1] - start_bx[1]);
+    /*dbl_ws中的位置分配：
+    *   norm_b---(num_unconv个double)---rho1---(num_unconv个double)---rho2---(num_unconv个double)---pTw---(num_unconv个double)---init_res---(num_unconv个double)---last_res
+    */
     num_unconv = end_bx[0] - start_bx[0]; // 最初预设所有向量都未受敛
-    norm_b = bpcg->dbl_ws;                //double工作空间的地址赋给norm_b，用来储存b的范数
-    rho1 = norm_b + num_unconv;           // rho1 = ||b|| + num_unconv
-    rho2 = rho1 + num_unconv;             // rho2 = ||b|| + 2*num_unconv
-    pTw = rho2 + num_unconv;              // TODO:为什么要这样初始化？ pTw = ||b|| + 3* num_unconv
-    init_res = pTw + num_unconv;          // last_res = ||b|| + 4*num_unconv
-    last_res = init_res + num_unconv;     // last_res = ||b|| + 5*num_unconv
-    unconv = bpcg->int_ws;                // int工作空间的地址赋给unconv,用来存储未收敛向量的索引
-    block = unconv + num_unconv;          // 指向int_ws工作空间的起始位置偏移num_unconv 个int的位置
+    // 分配各个double变量在dbl_ws中的存储地址
+    norm_b = bpcg->dbl_ws;
+    rho1 = norm_b + num_unconv;
+    rho2 = rho1 + num_unconv;
+    pTw = rho2 + num_unconv;
+    init_res = pTw + num_unconv;
+    last_res = init_res + num_unconv;
+    unconv = bpcg->int_ws;       // int工作空间的地址赋给unconv,用来存储未收敛向量的索引
+    block = unconv + num_unconv; // 指向int_ws工作空间的起始位置偏移num_unconv 个int的位置
 
 // 如果需要记录用时
 #if TIME_BPCG
@@ -219,7 +221,7 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
     end[1] = num_unconv;
     // 计算 A*x
     if (bpcg->MatDotMultiVec != NULL) {                             // 如果求解器带了自定义的MatDotMultiVec函数
-        bpcg->MatDotMultiVec(mv_x, mv_r, start, end, mv_p, 0, ops); // TODO 没有把矩阵传进去,为什么要传入mv_p?bpcg->MatDotMultiVec怎么定义的
+        bpcg->MatDotMultiVec(mv_x, mv_r, start, end, mv_p, 0, ops); // TODO bpcg->MatDotMultiVec怎么定义的?可能和预条件有关
     } else {                                                        // 否则调用默认的MatDotMultiVec函数，y = Ax, 结果存储在mv_r中
         ops->MatDotMultiVec(mat, mv_x, mv_r, start, end, ops);
     }
@@ -235,8 +237,7 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
     end[0] = end_bx[0];
     start[1] = 0;
     end[1] = num_unconv;
-    //TODO 上面如果调用的是bpcg->MatDotMultiVec？
-    // 对于未受敛的向量，计算r = b - r.这里mv_r存的是上面调用默认的MatDotMultiVec函数记算出来的A*x
+    // 对于未受敛的向量，计算r = b - A*x.这里mv_r存的是上面调用默认的MatDotMultiVec函数记算出来的A*x
     ops->MultiVecAxpby(1.0, mv_b, -1.0, mv_r, start, end, ops);
 #if TIME_BPCG
     time_bpcg.axpby_time += ops->GetWtime();

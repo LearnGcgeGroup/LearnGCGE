@@ -463,7 +463,6 @@ static void MultiVecLocalInnerProd(char nsdIP,
                                    double *inner_prod, int ldIP, struct OPS_ *ops) {
     int nrows = end[0] - start[0], ncols = end[1] - start[1];
     if (nrows > 0 && ncols > 0) {
-        // TODO:ntluA为什么可以设置成'S'?
         DenseMatQtAP('S', nsdIP, x->nrows, y->nrows, nrows, ncols,
                      1.0, x->data + x->ldd * start[0], (x->ldd), /* Q */
                      NULL, 0,                                    /* A */
@@ -480,7 +479,7 @@ static void MultiVecLocalInnerProd(char nsdIP,
  * 该函数是对MultiVecLocalInnerProd的封装，用于计算多个向量的内积。
  * 适用于需要分块计算或并行计算的情景，通过start/end参数指定计算范围。
  * 
- * @param[in] nsdIP     字符参数，指定内积存储方式（例如'S'表示对称存储）
+ * @param[in] nsdIP     字符参数，指定内积存储方式（'D'对角/'S'对称/'N'普通），主要用于传入MultiVecLocalInnerProd中
  * @param[in] x         输入向量/矩阵
  * @param[in] y         输入向量/矩阵
  * @param[in] is_vec    向量模式标志位（0-矩阵模式，1-向量模式）

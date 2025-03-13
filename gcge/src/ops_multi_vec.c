@@ -308,9 +308,8 @@ void DefaultMultiVecLocalInnerProd(char nsdIP, void **x, void **y, int is_vec, i
  */
 void DefaultMultiVecInnerProd(char nsdIP, void **x, void **y, int is_vec, int *start, int *end,
                               double *inner_prod, int ldIP, struct OPS_ *ops) {
-    /* 调用本地计算内核（单节点/单进程内计算）*/
+    // 在当前进程的本地数据上计算内积。这一步骤得到的是每个进程上的局部结果
     ops->MultiVecLocalInnerProd(nsdIP, x, y, is_vec, start, end, inner_prod, ldIP, ops);
-// TODO:和上面的InnerProd的区别
 #if OPS_USE_MPI
     /* 计算实际处理区域的维度 */
     int nrows = end[0] - start[0], ncols = end[1] - start[1];
@@ -321,7 +320,7 @@ void DefaultMultiVecInnerProd(char nsdIP, void **x, void **y, int is_vec, int *s
     }
     /* 根据内存布局选择不同的MPI归约策略 */
     if (nrows == ldIP) {
-        /* 连续内存布局：直接进行全局求和归约 */
+        /* 连续内存布局：直接将局部内积结果合并成全局结果 */
         MPI_Allreduce(MPI_IN_PLACE, inner_prod,
                       nrows * ncols, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
     } else {
@@ -330,10 +329,9 @@ void DefaultMultiVecInnerProd(char nsdIP, void **x, void **y, int is_vec, int *s
         MPI_Op op;
         // 创建描述子矩阵内存布局的数据类型
         CreateMPIDataTypeSubMat(&data_type, nrows, ncols, ldIP);
-        // 创建支持子矩阵求和的自定义归约操作
+        // 创建支持子矩阵求和的自定义归约操作，用于对子矩阵的求和
         CreateMPIOpSubMatSum(&op); /* �Ե�һ��������submat */
         /* 执行自定义类型的全局归约 */
-        // TODO:归约？
         MPI_Allreduce(MPI_IN_PLACE, inner_prod,
                       1, data_type, op, MPI_COMM_WORLD);
         // 清理自定义MPI资源
