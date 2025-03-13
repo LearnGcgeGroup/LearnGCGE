@@ -378,7 +378,6 @@ void DefaultMultiVecSetRandomValue(void **x, int start, int end, struct OPS_ *op
  * @param ops      操作接口
  */
 void DefaultMultiVecAxpby(
-    // TODO: 二次开发的必要性
     double alpha, void **x, double beta, void **y,
     int *start, int *end, struct OPS_ *ops) {
     int col, ncols = end[1] - start[1];
