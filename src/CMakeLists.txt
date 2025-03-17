@@ -52,17 +52,36 @@ else()
     message(FATAL_ERROR "OpenBLAS not found!")
 endif()
 
-target_link_libraries(test PRIVATE 
-    "${PETSC_DIR}/lib/libpetsc.a"     # PETSC # todo: 这样写存在链接错误，为什么
-    GCGE
-    MPI::MPI_C          # MPI C 库， # todo: 采用${MPI_C_LIBRARIES}会失败，为什么
-    OpenBLAS::OpenBLAS  # OpenBLAS
-    regex               # 正则表达式库
-    gfortran            # GNU Fortran 运行时库
-    stdc++              # C++ 标准库
-    quadmath            # 高精度数学库（Fortran 相关）
-    OpenMP::OpenMP_C    # OpenMP C 库, todo: 是否要包含OpenMP::OpenMP_CXX
-)
+if(UNIX)
+    target_link_libraries(test PRIVATE 
+        "${PETSC_DIR}/lib/libpetsc.a"     # PETSC # todo: 这样写存在链接错误，为什么
+        GCGE
+        MPI::MPI_C          # MPI C 库， # todo: 采用${MPI_C_LIBRARIES}会失败，为什么
+        openblas            # OpenBLAS
+        m                   # petsc需要的库
+        mpifort
+        mpi
+        gfortran            # GNU Fortran 运行时库
+        gcc_s
+        stdc++              # C++ 标准库
+        quadmath            # 高精度数学库（Fortran 相关）
+        OpenMP::OpenMP_C    # OpenMP C 库, todo: 是否要包含OpenMP::OpenMP_CXX
+    )
+endif()
+
+if(WIN32)
+    target_link_libraries(test PRIVATE 
+        "${PETSC_DIR}/lib/libpetsc.a"     # PETSC # todo: 这样写存在链接错误，为什么
+        GCGE
+        MPI::MPI_C          # MPI C 库， # todo: 采用${MPI_C_LIBRARIES}会失败，为什么
+        OpenBLAS::OpenBLAS  # OpenBLAS
+        regex               # 正则表达式库
+        gfortran            # GNU Fortran 运行时库
+        stdc++              # C++ 标准库
+        quadmath            # 高精度数学库（Fortran 相关）
+        OpenMP::OpenMP_C    # OpenMP C 库, todo: 是否要包含OpenMP::OpenMP_CXX
+    )
+endif()
 
 if(WIN32)
     target_link_libraries(test PRIVATE
