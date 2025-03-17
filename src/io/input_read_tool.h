@@ -13,6 +13,7 @@
 #include "param_struct.h"   // 求解参数的结构体定义
 #include <stdexcept>        // 处理异常
 #include "error_code.h"
+#include <petscmat.h>
 
 extern "C" {
     #include "app_ccs.h"
@@ -22,7 +23,6 @@ extern "C" {
     #include "ops_eig_sol_gcg.h"
     #include "ops_lin_sol.h"
     #include "ops_orth.h"
-    // #include "mmloader.h"
 }
 
 class InputReadTool {
@@ -40,13 +40,13 @@ public:
     static GcgeErrCode ReadCcsFromMtx(CCSMAT *ccs_matA, char* file_matrix);
 
     /**
-     * @brief 读取MTX文件生成CCS格式的矩阵
+     * @brief 读取MTX文件生成petsc格式的矩阵
      * 
-     * @param ccs_matA 矩阵地址
+     * @param Mat 矩阵地址
      * @param file_matrix 文件路径
      * @return GcgeErrCode 错误码
      */
-    static GcgeErrCode ReadPetscMatFromMtx(CCSMAT *ccs_matA, char* file_matrix);
+    static GcgeErrCode ReadPetscMatFromMtx(Mat *petsc_matA, char* file_matrix);
 
     /**
      * @brief 读取用户设置的求解参数txt文档
@@ -57,6 +57,14 @@ public:
      * @return GcgeErrCode 错误码
      */
     static GcgeErrCode readUserParam(GcgeParam& param, ExtractMethod& method, std::string paramFileName = "usrParam.txt");
+
+    /**
+     * @brief 将petsc格式的矩阵转换为CCS格式的矩阵
+     * 
+     * @param src petsc格式的矩阵
+     * @param des CCS格式的矩阵
+     */
+    static void ConvertPetscMatToCCSMat(Mat src, CCSMAT &des);
 
 private:
     /**
