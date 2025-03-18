@@ -30,8 +30,19 @@ make
 ##### 2.1 下载外部依赖包
 - sudo apt install build-essential openssl libssl-dev 
 - 下载编译安装 cmake-3.16.5
-- 下载编译安装 OpenBLAS-0.3.24    
+- 下载编译安装 OpenBLAS-0.3.24
 - 下载编译安装 mpich-4.2.3
+    ```bash
+    wget https://www.mpich.org/static/downloads/4.2.3/mpich-4.2.3.tar.gz
+    tar -xzf mpich-4.2.3.tar.gz
+    cd mpich-4.2.3
+    ./configure --prefix=$HOME/mpich-4.2.3 # --prefix=后面是安装路径，可不填则默认安装到系统路径
+    make -j4
+    make install
+    echo 'export PATH=$HOME/mpich-4.2.3/bin:$PATH' >> ~/.bashrc # 路径要根据自己的安装路径而定
+    echo 'export LD_LIBRARY_PATH=$HOME/mpich-4.2.3/lib:$LD_LIBRARY_PATH' >> ~/.bashrc
+    source ~/.bashrc
+    ```
 
 ##### 2.2 编译
 ```bash
@@ -78,16 +89,19 @@ make
 ```
 
 #### 3、运行过程遇见的问题
-1.windows系统运行时,不能使用mpiexec命令
+1. windows系统运行时,不能使用mpiexec命令
 
 --原因：mingw-w64-x86_64-msmpi安装包的部分版本不含msmpi
 
 --措施：在windows系统下载安装msmpisetup.exe
 
-2.ubuntu系统运行时,出现"OpenBLAS Warning : Detect OpenMP Loop and this application may hang. Please rebuild the library with USE_OPENMP=1 option"
+2. ubuntu系统运行时,出现"OpenBLAS Warning : Detect OpenMP Loop and this application may hang. Please rebuild the library with USE_OPENMP=1 option"
 
 --措施：export OMP_NUM_THREADS=1
 
+3. 编译成功，运行时报错：YOUR APPLICATION TERMINATED WITH THE EXIT STRING: Illegal instruction (signal 4)，加日志定位到PetscInitialize初始化失败。
+--原因：因系统差异导致。当前打包的petsc.a是在ubuntu22.04下编译的，不同版本系统需要使用自己系统下编译的petsc.a。
+--措施：自己编译petsc.a
 
 ### 三、当前软件运行逻辑
     读入MTX矩阵到petsc格式的Mat中，再转换为CCS_MAT格式，调用串行版GCGE求解器

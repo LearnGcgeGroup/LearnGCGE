@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
 #if OPS_USE_PETSC
     PetscCall(PetscFinalize());
 #elif OPS_USE_MPI
-    MPI_Init(&argc, &argv);
+    MPI_Finalize();
 #endif
     return 0;
 }
