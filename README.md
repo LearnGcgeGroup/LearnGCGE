@@ -78,16 +78,23 @@ make
 运行时：
  - 在Mingw64命令行窗口中执行如下命令, 其中<num>为期望采用的进程数量
     ```bash
-    mpiexec -n <num> ./test.exe K.mtx M.mtx usrParam.txt
+    mpiexec -n <num> ./test.exe ../example/K.mtx ../example/M.mtx ../example/usrParam.txt
     ```
-
+ - 在Ubuntu bash命令行窗口中执行如下命令, 其中<num>为期望采用的进程数量
+    ```bash
+    mpiexec -n <num> ./test ../example/K.mtx ../example/M.mtx ../example/usrParam.txt
+    ```
 #### 2、非MPI形成运行(需参照2.1内容做反向修改)
-在Mingw64命令行窗口中执行:
+ - 在Mingw64命令行窗口中执行:
 
 ```bash
 ./test.exe K.mtx M.mtx usrParam.txt
 ```
+ - 在Ubuntu bash命令行窗口中执行:
 
+```bash
+./test K.mtx M.mtx usrParam.txt
+```
 #### 3、运行过程遇见的问题
 1. windows系统运行时,不能使用mpiexec命令
 
