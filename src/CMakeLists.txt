@@ -35,10 +35,12 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/gcge/include
     ${PROJECT_SOURCE_DIR}/src
     ${PETSC_INCLUDE_DIR} # PETSc 头文件路径
+    ${SLEPC_INCLUDE_DIR} # SLEPc 头文件路径
 )
 # 设置库文件搜索路径
 link_directories(
     ${PETSC_LIB_DIR}
+    ${SLEPC_LIB_DIR}
 )
 
 file(GLOB_RECURSE ALL_SOURCES "*.cpp" "*.c" "*.h")
@@ -54,6 +56,7 @@ endif()
 
 if(UNIX)
     target_link_libraries(test PRIVATE 
+        "${SLEPC_DIR}/lib/libslepc.a"     # SLEPC需要放在PETSC之前
         "${PETSC_DIR}/lib/libpetsc.a"     # PETSC # todo: 这样写存在链接错误，为什么
         GCGE
         MPI::MPI_C          # MPI C 库， # todo: 采用${MPI_C_LIBRARIES}会失败，为什么

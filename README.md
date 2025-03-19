@@ -107,6 +107,11 @@ make
     读入MTX矩阵到petsc格式的Mat中，再转换为CCS_MAT格式，调用串行版GCGE求解器
     目的是：验证MTX矩阵读入为petsc的Mat矩阵正确。
 
+
+### 四、待进一步明确事项
+  libpetsc.a的编译，使用“./configure --with-mpiexec=xx --with-blas-lib=/xxx/lib/libopenblas.a --with-lapack-lib=/xxx/lib/libopenblas.a  xxx”编译的libpetsc.a仅58M大小(上传了)，但是要依赖libmpifort.a等库，这些依赖库是按照另一种“./configure --with xxx”编译出来库(也有一个大小约229M的libpetsc.a)，这些库共同作用才能将petsc作为第三方库使用
+    
+    
 ### 附件：原始readme内容
 #### 外部包
 

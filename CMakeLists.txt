@@ -19,5 +19,8 @@ include(linux_mpicc)
 # 载入 PETSc 配置
 include(PETScConfig)
 
+# 载入 SLEPc 配置
+include(SLEPcConfig)
+
 add_subdirectory(gcge)  # 添加 gcge 库的子目录
 add_subdirectory(src)   # 添加 src 可执行文件的子目录

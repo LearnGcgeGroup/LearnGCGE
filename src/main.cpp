@@ -15,6 +15,10 @@
 
 #include <petscmat.h>
 
+#if OPS_USE_SLEPC
+#include <slepcbv.h>
+#endif
+
 extern "C" {
 #include "app_ccs.h"
 #include "app_lapack.h"
@@ -32,7 +36,10 @@ int main(int argc, char *argv[])
         std::cerr << "Usage: mpiexec -n <b> program <sourceMatA.mtx> <sourceMatB.mtx> <paramFile.txt>" << std::endl;
         return GCGE_ERR_INPUT;
     }
-#if OPS_USE_PETSC
+    
+#if OPS_USE_SLEPC
+    SlepcInitialize(&argc, &argv, NULL, NULL);
+#elif OPS_USE_PETSC
     PetscFunctionBeginUser;
     PetscCall(PetscInitialize(&argc, &argv, NULL, NULL));
 #elif OPS_USE_MPI
@@ -138,7 +145,9 @@ int main(int argc, char *argv[])
 #endif
     destroyMatrixCCS(&sourceMatA, &sourceMatB);
 
-#if OPS_USE_PETSC
+#if OPS_USE_SLEPC
+    SlepcFinalize();
+#elif OPS_USE_PETSC
     PetscCall(PetscFinalize());
 #elif OPS_USE_MPI
     MPI_Finalize();
