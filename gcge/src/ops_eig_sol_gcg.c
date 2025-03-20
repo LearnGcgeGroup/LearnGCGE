@@ -49,16 +49,31 @@ static double tmp_sigma[200];
 /* y = ( A+sigma B ) x
  * Only for CG (A+sigma*B)y = (lambda+sigma) B x
  * use z[s:end] as workspace, which is b or p in CG */
+/**
+ * @brief 执行矩阵-向量点乘并叠加移位后的向量运算 y = ( A+sigma B ) x
+ * 
+ * 该函数主要用于处理矩阵A和矩阵B（如果存在）与输入向量的组合运算，
+ * 并根据sigma参数调整最终结果。
+ * 
+ * @param[in,out] x      输入向量集合，可能被复用
+ * @param[in,out] y      结果向量集合，用于累加计算结果
+ * @param[in] start      二维起始索引数组 [列起始, 行起始]
+ * @param[in] end        二维结束索引数组 [列结束, 行结束]
+ * @param[in,out] z      临时向量存储空间，用于B矩阵运算时的中间结果
+ * @param[in] s          行偏移量，用于指定临时向量的起始位置
+ * @param[in] ops        操作函数集合结构体指针，包含矩阵向量运算接口
+ */
 static void MatDotMultiVecShift(void **x, void **y,
                                 int *start, int *end, void **z, int s, struct OPS_ *ops) {
     void *A = gcg_solver->A;
     void *B = gcg_solver->B;
 
     double sigma = gcg_solver->sigma;
+    // 执行基础矩阵向量点乘累加操作
     ops->MatDotMultiVec(A, x, y, start, end, ops);
     if (sigma != 0.0) {
         if (B == NULL) {
-#if 1
+#if 1 // 使用统一sigma值的向量线性组合
             ops->MultiVecAxpby(sigma, x, 1.0, y, start, end, ops);
 #else
             int ncols = end[0] - start[0], col;
@@ -66,19 +81,23 @@ static void MatDotMultiVecShift(void **x, void **y,
                 ops->MultiVecAxpby(tmp_sigma[col + start[1]], x, 1.0, y, start, end, ops);
             }
 #endif
-        } else {
+        } else { // B矩阵存在时的处理流程
             // void **z;
             // ops->MultiVecCreateByMat(&z,end[0]-start[0],A,ops);
             int start_tmp[2], end_tmp[2];
+            // 配置B矩阵运算的列范围
             start_tmp[0] = start[0];
             end_tmp[0] = end[0];
-            start_tmp[1] = s;
+            start_tmp[1] = s; // 设置行偏移
             end_tmp[1] = s + end[0] - start[0];
+            // 执行B矩阵向量运算到临时存储
             ops->MatDotMultiVec(B, x, z, start_tmp, end_tmp, ops);
+            // 调整索引进行结果叠加
             start_tmp[0] = s;
             end_tmp[0] = s + end[0] - start[0];
             start_tmp[1] = start[1];
             end_tmp[1] = end[1];
+            // 将临时结果叠加到最终输出
             ops->MultiVecAxpby(sigma, z, 1.0, y, start_tmp, end_tmp, ops);
             // ops->MultiVecDestroy(&z,end[0]-start[0],ops);
         }
@@ -161,7 +180,6 @@ static void InitializeX(void **V, void **ritz_vec, void *B, int nevGiven) {
 #endif
     return;
 }
-
 
 /**
  * @brief X = V C将子空间基底下的特征向量转换为原空间基底下的特征向量
@@ -301,7 +319,7 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec,
     // offset[0]：记录未收敛区间的个数
     // offset[2n+1] 和 offset[2n+2]：分别表示第 n 个未收敛区间的起始和结束位置，0 <= n < offset[0]。
     // offset[2n+1] <= idx < offset[2n+2]中 idx 是不收敛的标号
-    int state; // 标记当前状态，1 表示当前处于收敛状态，0 表示当前处于未收敛状态
+    int state;      // 标记当前状态，1 表示当前处于收敛状态，0 表示当前处于未收敛状态
     int num_unconv; // 标记当前未收敛区间的长度
     /* 1 1 0 0 1 1 1 1 0 0 1 0 1 0 0 0 0 0 0 */
     offset[0] = 0; // 未收敛区间的个数
@@ -340,7 +358,7 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec,
     if (num_unconv < sizeN) {
         // state表示当前值是否收敛
         // 若循环完成时处于不收敛状态(可能最后两个值均不收敛，此时state为0)，此时怎么处理？
-        if (state == 1) { // 如果当前是收敛状态则新建一个区间(即之后未检查的全部认为不收敛)
+        if (state == 1) {                                  // 如果当前是收敛状态则新建一个区间(即之后未检查的全部认为不收敛)
             offset[offset[0] * 2 + 1] = startN + numCheck; // 新建一个区间从startN + numCheck开始
         }
         // 设置新区间的结束位置或者在校验到numCheck位置时仍未收敛的区间的结束位置
@@ -368,7 +386,7 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec,
 
 // 构建子空间P： P^{(i+1)} = X^{(i+1)} - X^{(i)} (X^{(i)T} B X^{(i+1)})，
 // 			   对应于 N_new - N_old (N_old^T B N_new)
-// Input: 
+// Input:
 //		ss_evec 子空间基底下小规模问题的特征向量 C
 //		offset
 // Output:
@@ -554,7 +572,7 @@ static void ComputeX(void **V, void **ritz_vec) {
 //		A 矩阵, B 矩阵
 //		ss_eval 近似特征值, ritz_vec 近似特征向量
 //		offset 矩阵W的列偏移索引， offset[0]为列数， [offset[idx*2+1],offset[idx*2+2]) 为第idx列位置索引
-// Output: 
+// Output:
 //		V 矩阵
 static void ComputeW(void **V, void *A, void *B,
                      double *ss_eval, void **ritz_vec, int *offset) {
@@ -580,26 +598,25 @@ static void ComputeW(void **V, void *A, void *B,
 #if DEBUG
     ops_gcg->Printf("ss_eval[%d] = %e, sigma = %e\n", sizeC, ss_eval[sizeC], gcg_solver->sigma);
 #endif
-	assert(gcg_solver->compW_cg_auto_shift == 0 || gcg_solver->user_defined_multi_linear_solver == 0);
+    assert(gcg_solver->compW_cg_auto_shift == 0 || gcg_solver->user_defined_multi_linear_solver == 0);
 
-	/* initialize */
-	block_size = 0; // W矩阵的元素计数器，用于接下来的for循环 
-	startW = endP; 
-	inc = 1; 
+    /* initialize */
+    block_size = 0; // W矩阵的元素计数器，用于接下来的for循环
+    startW = endP;
+    inc = 1;
 
-	// 2）逐列构造线性方程组右端项b， 注意：block_size 和 destin 会累加更新
-	for (idx = 0; idx < offset[0]; ++idx) {
+    // 2）逐列构造线性方程组右端项b， 注意：block_size 和 destin 会累加更新
+    for (idx = 0; idx < offset[0]; ++idx) {
+        length = offset[idx * 2 + 2] - offset[idx * 2 + 1];
 
-		length   = offset[idx * 2 + 2]-offset[idx * 2 + 1];
-		
-		/* initialize x */
-		// 将子空间投影问题的解作为线性方程组迭代的初始解
-		start[0] = offset[idx * 2 + 1]; 
-		end[0] = offset[idx * 2 + 2];
-		start[1] = startW+block_size; 
-		end[1] = start[1]+length;
+        /* initialize x */
+        // 将子空间投影问题的解作为线性方程组迭代的初始解
+        start[0] = offset[idx * 2 + 1];
+        end[0] = offset[idx * 2 + 2];
+        start[1] = startW + block_size;
+        end[1] = start[1] + length;
         // 将ritz_vec中未收敛的列向量[offset[idx * 2 + 1], offset[idx * 2 + 2])拷贝至V中(startW的位置)
-		ops_gcg->MultiVecAxpby(1.0, ritz_vec, 0.0, V, start, end, ops_gcg);
+        ops_gcg->MultiVecAxpby(1.0, ritz_vec, 0.0, V, start, end, ops_gcg);
 #if 0
 		/* 20210530 Ax = lambda Bx - theta Ax */
 		int tmp_start[2], tmp_end[2]; double tmp_theta = 0.0;
@@ -613,7 +630,7 @@ static void ComputeW(void **V, void *A, void *B,
 #endif
         /* set b, b = (lambda+sigma) Bx */
 
-		// Step 1: b = BX
+        // Step 1: b = BX
         start[0] = offset[idx * 2 + 1];
         end[0] = offset[idx * 2 + 2];
         start[1] = offset[1] + block_size;
@@ -632,7 +649,7 @@ static void ComputeW(void **V, void *A, void *B,
 #if 1
         // Step 2: b = (lambda+sigma) Bx
         // 论文中b = (lambda - sigma) Bx，是否有影响?
-		/* shift eigenvalues with sigma */
+        /* shift eigenvalues with sigma */
         for (i = start[0]; i < end[0]; ++i)
             ss_eval[i] += sigma;
         ops_gcg->MultiVecLinearComb(NULL, b, 0, start, end,
@@ -687,21 +704,21 @@ static void ComputeW(void **V, void *A, void *B,
 #endif
     void (*lin_sol)(void *, void **, void **, int *, int *, struct OPS_ *); // 冗余操作？ 作为中间变量对 ops_gcg->MultiLinearSolver 进行了一次备份和恢复
     void *ws;
-    lin_sol = ops_gcg->MultiLinearSolver; // 冗余操作？
+    lin_sol = ops_gcg->MultiLinearSolver;        // 冗余操作？
     ws = ops_gcg->multi_linear_solver_workspace; // 冗余操作？
     /* b is set to (lambda+sigma) Bx */
-    if (gcg_solver->user_defined_multi_linear_solver == 2) {		// 疑似漏删的代码片段，没有信息显示2号求解器使用何种方法 好像是UMFPACK_MultiLinearSolver
+    if (gcg_solver->user_defined_multi_linear_solver == 2) { // 疑似漏删的代码片段，没有信息显示2号求解器使用何种方法 好像是UMFPACK_MultiLinearSolver
         ops_gcg->MultiLinearSolver(A, b, V, start, end, ops_gcg);
     }
 #if TIME_GCG
     time_gcg.linsol_time += ops_gcg->GetWtime();
 #endif
     if (gcg_solver->user_defined_multi_linear_solver == 0 ||
-        gcg_solver->user_defined_multi_linear_solver == 2) {	// 疑似漏删的代码片段，没有信息显示2号求解器使用何种方法  
+        gcg_solver->user_defined_multi_linear_solver == 2) { // 疑似漏删的代码片段，没有信息显示2号求解器使用何种方法
 #if 1
         // 配置BlockPCG求解器参数
         if (sigma != 0.0 && B != NULL && ops_gcg->MatAxpby != NULL) {
-            ops_gcg->MatAxpby(sigma, B, 1.0, A, ops_gcg);    // 构造线性方程组系数矩阵  /* 20210628 A = sigma B + A */
+            ops_gcg->MatAxpby(sigma, B, 1.0, A, ops_gcg); // 构造线性方程组系数矩阵  /* 20210628 A = sigma B + A */
             // 没有给预条件，给了预条件会不会收敛更快?
             MultiLinearSolverSetup_BlockPCG(
                 gcg_solver->compW_cg_max_iter,
@@ -724,7 +741,7 @@ static void ComputeW(void **V, void *A, void *B,
 #if TIME_GCG
     time_gcg.linsol_time -= ops_gcg->GetWtime();
 #endif
-	// 非精确求解线性方程组
+    // 非精确求解线性方程组
     // start, end两个参数的含义是什么？
     ops_gcg->MultiLinearSolver(A, b, V, start, end, ops_gcg);
 #if 1
@@ -743,7 +760,7 @@ static void ComputeW(void **V, void *A, void *B,
 #if TIME_GCG
     time_gcg.linsol_time += ops_gcg->GetWtime();
 #endif
-    ops_gcg->MultiLinearSolver = lin_sol; // 冗余操作？
+    ops_gcg->MultiLinearSolver = lin_sol;        // 冗余操作？
     ops_gcg->multi_linear_solver_workspace = ws; // 冗余操作？
 
 #if DEBUG
@@ -807,7 +824,7 @@ static void ComputeW(void **V, void *A, void *B,
     return;
 }
 
-// 据反馈为一次无效的改进，可以忽略。 
+// 据反馈为一次无效的改进，可以忽略。
 // for linear response eigenvalue problems
 static void ComputeW12(void **V, void *A, void *B,
                        double *ss_eval, void **ritz_vec, int *offset) {
@@ -915,7 +932,7 @@ static void ComputeW12(void **V, void *A, void *B,
     ops_gcg->MultiVecView(b, offset[1], offset[1] + (total_length / 2), ops_gcg);
 #endif
 
-	// 非精确求解线性方程组
+    // 非精确求解线性方程组
     ops_gcg->MultiLinearSolver(A, b, V, start, end, ops_gcg);
 #if TIME_GCG
     time_gcg.linsol_time += ops_gcg->GetWtime();
@@ -1096,7 +1113,7 @@ static void ComputeRayleighRitz(double *ss_matA, double *ss_eval, double *ss_eve
                               ss_matA, sizeV - sizeC,                                          /* A */
                               ss_evec + (sizeV - sizeC) * (sizeX - sizeC), sizeV - sizeC,      /* P */
                               // dbl_ws此时指向放置完其他数据后的首地址(即未被占用的工作空间的首地址)
-                              0.0, dbl_ws, nrows,                                              /* C */
+                              0.0, dbl_ws, nrows, /* C */
                               // (dbl_ws ————dbl_ws + nrows * ncols)的范围用于放置C(即P^T*A*P)的计算结果
                               // dbl_ws + nrows * ncols之后的位置用于算法内部临时使用
                               dbl_ws + nrows * ncols);
@@ -1485,7 +1502,7 @@ static void GCG(void *A, void *B, double *eval, void **evec,
     int numIterMax, numIter, numCheck;
     void **V, **ritz_vec;
     double *ss_matA; // 子空间的矩阵
-    double*ss_diag;  // 子空间矩阵的对角线元素
+    double *ss_diag; // 子空间矩阵的对角线元素
     double *ss_eval; // 子空间矩阵的特征值
     double *ss_evec; // 子空间矩阵的特征向量(按列存储)
     double *tol;
@@ -1541,23 +1558,24 @@ static void GCG(void *A, void *B, double *eval, void **evec,
     ss_matA = ss_diag + (sizeV - sizeC);
     ss_evec = ss_matA + (sizeV - sizeC) * (sizeV - sizeC);
 
-    int distance = (nevMax + 2 * block_size)                                  /* ss_eval */
-                   + (nevInit + 2 * block_size)                               /* ss_diag */
-                   + (nevInit + 2 * block_size) * (nevInit + 2 * block_size)  /* ss_matA */
-                   + (nevInit + 2 * block_size) * (nevInit + 1 * block_size); /* ss_evec */   // 为什么是 1*block_size?
+    int distance = (nevMax + 2 * block_size)                                 /* ss_eval */
+                   + (nevInit + 2 * block_size)                              /* ss_diag */
+                   + (nevInit + 2 * block_size) * (nevInit + 2 * block_size) /* ss_matA */
+                   + (nevInit + 2 * block_size) * (nevInit + 1 * block_size);
+    /* ss_evec */ // 为什么是 1*block_size?
     /* dbl_ws 包含 W 的部分 */
     dbl_ws = gcg_solver->dbl_ws + distance;
-    gcg_solver->length_dbl_ws = (nevMax + 2 * block_size)                                     /* ss_eval */
-                                + 2 * (nevInit + 2 * block_size) * (nevInit + 2 * block_size) /* ss_matA ss_evec */   // 从这里看1*block_size应该是写错了
-                                + 10 * (nevInit + 2 * block_size)                             /* ss_diag WORK */    // 为什么是 10*?
-                                + nevMax * block_size;                                        /* for orth */
+    gcg_solver->length_dbl_ws = (nevMax + 2 * block_size)                                                           /* ss_eval */
+                                + 2 * (nevInit + 2 * block_size) * (nevInit + 2 * block_size) /* ss_matA ss_evec */ // 从这里看1*block_size应该是写错了
+                                + 10 * (nevInit + 2 * block_size) /* ss_diag WORK */                                // 为什么是 10*?
+                                + nevMax * block_size;                                                              /* for orth */
 #if DEBUG
-    ops_gcg->Printf ( "gcg_solver->length_dbl_ws = %d\n", gcg_solver->length_dbl_ws );
+    ops_gcg->Printf("gcg_solver->length_dbl_ws = %d\n", gcg_solver->length_dbl_ws);
 #endif
 
 #if 1
     offsetP = gcg_solver->int_ws;
-    offsetW = offsetP + block_size + 3;  // 为什么是 +3?
+    offsetW = offsetP + block_size + 3; // 为什么是 +3?
     int_ws = offsetW + block_size + 3;
 #else
     int_ws = gcg_solver->int_ws;

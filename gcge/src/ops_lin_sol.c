@@ -427,7 +427,7 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
         ops->Printf("niter = %d, num_unconv = %d, residual[%d] = %6.4e\n",
                     niter + 1, num_unconv, unconv[0], last_res[unconv[0]] / norm_b[unconv[0]]);
 #endif
-        /* �ж������� */
+        /* 判断收敛性 */
         pre_num_unconv = num_unconv;
         num_unconv = 0;
         for (idx = 0; idx < pre_num_unconv; ++idx) {
@@ -437,7 +437,7 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
             // TODO:为什么需要满足第一个条件？
             if ((last_res[col] > rate * init_res[col]) && (last_res[col] > tol * norm_b[col])) {
                 unconv[num_unconv] = col;
-                /* �轫 rho1 rho2 δ��������˳��ǰ�� */
+                /* 需将 rho1 rho2 未收敛部分顺序前移 */
                 rho1[num_unconv] = rho1[idx];
                 rho2[num_unconv] = rho2[idx];
                 ++num_unconv;
