@@ -68,8 +68,8 @@ int main(int argc, char *argv[])
 
     char *fileB = argv[2];
 #if OPS_USE_SLEPC
-    Mat sourceMatA;
-    auto err = InputReadTool::ReadPetscMatFromMtx(&sourceMatA, fileA);
+    Mat sourceMatB;
+    err = InputReadTool::ReadPetscMatFromMtx(&sourceMatB, fileA);
 #elif OPS_USE_PETSC
     Mat tmpB;
     err = InputReadTool::ReadPetscMatFromMtx(&tmpB, fileB);
@@ -106,8 +106,13 @@ int main(int argc, char *argv[])
     void *matA, *matB;
     OPS* ops;
     ops = ccs_ops;
+#if OPS_USE_SLEPC
+    matA = static_cast<void*>(sourceMatA);
+    matB = static_cast<void*>(sourceMatB);
+#else
     matA = static_cast<void*>(&sourceMatA);
     matB = static_cast<void*>(&sourceMatB);
+#endif
 
     gcgeparam.shift = 0;
     if (gcgeparam.nevConv <= 50) {
