@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
     char *fileB = argv[2];
 #if OPS_USE_SLEPC
     Mat sourceMatB;
-    err = InputReadTool::ReadPetscMatFromMtx(&sourceMatB, fileA);
+    err = InputReadTool::ReadPetscMatFromMtx(&sourceMatB, fileB);
 #elif OPS_USE_PETSC
     Mat tmpB;
     err = InputReadTool::ReadPetscMatFromMtx(&tmpB, fileB);
