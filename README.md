@@ -82,6 +82,9 @@ make
 
 
 ### 二、运行
+#### 0、前置条件(linux用户需要，windows用户无需关注)
+将[北大网盘](https://disk.pku.edu.cn/anyshare/en-us/link/AA548F0BE3A06C4D5F89ACDBB75CA064A5/1C76B092E67C4259A300273659600FC2/15A06B7829A24EDDBADD099A1AA3EAE5?_tb=none)中`libpetsc.a`文件拷贝到`LearnGCGE/3rd/petsc/linux/lib/libpetsc.a`
+原因：当前libpetsc.a没有进行编译优化，导致文件体积过大(180M),无法传入github仓库，因此暂时放在北大网盘中，辛苦采用ubuntu环境的同学，手动下载放置在如上目录中。
 
 #### 1、采用MPI运行方式
 编译前(默认设置为MPI形式，因此无需修改)：
