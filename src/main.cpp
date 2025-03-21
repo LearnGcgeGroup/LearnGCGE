@@ -95,12 +95,12 @@ int main(int argc, char *argv[])
     // 2、设置工作空间
     OPS* ccs_ops = NULL;
     OPS_Create(&ccs_ops);
-    OPS_CCS_Set(ccs_ops);
 #if OPS_USE_SLEPC
     OPS_SLEPC_Set(ccs_ops);
 #else
-    OPS_Setup(ccs_ops);
+    OPS_CCS_Set(ccs_ops);
 #endif
+    OPS_Setup(ccs_ops);
 
     // 3、设置输入参数
     void *matA, *matB;
