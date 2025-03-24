@@ -24,7 +24,8 @@
 #include <float.h>	// 调用 DBL_EPSILON
 #include <math.h>
 #include <time.h>
-
+#include <petscmat.h>
+#include <petscsys.h>
 #include "ops_orth.h"
 
 #define  DEBUG 0
@@ -97,7 +98,24 @@ static void OrthSelf(void **x, int start_x, int *end_x, void *B, int max_reorth,
 
 		// 计算部分的x'Bx，并储存到r_k. r_k应为一个 (*end_x-k) x 1 大小的 B-内积矩阵。
 		ops->MultiVecQtAP('S','N',x,B,x,0,start,end,r_k,end[0]-start[0],mv_ws,ops); //'S'表示B是对称的，'N'表示不做额外的转置。
-		/** 
+		
+        // {
+        //     // 将BV转换成matlab矩阵的代码
+        //     Mat         A;
+        //     PetscViewer viewer;
+        //     // 假设 bv 已经初始化并填充数据
+        //     BVCreateMat(x, &A);
+        //     // 以 MATLAB 格式写入文件
+        //     PetscViewerASCIIOpen(PETSC_COMM_WORLD, "bv_output.m", &viewer);
+        //     PetscViewerPushFormat(viewer, PETSC_VIEWER_ASCII_MATLAB);
+        //     MatView(A, viewer);
+        //     PetscViewerPopFormat(viewer);
+        //     PetscViewerDestroy(&viewer);
+        //     // 释放资源
+        //     MatDestroy(&A);
+        // }
+
+        /** 
 		 * Q: 为什么r_k可能不是向量，却是 double* 类型？
 		 * A: 用列优先一维数组储存矩阵，行数为ldQAP = end[0]-start[0]，调用(i,j)元使用r_k[i + j * ldQAP]. 
 		 */

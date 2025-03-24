@@ -66,7 +66,7 @@ int eigenSolverGCG(void* A, void* B, std::vector<double>& eigenvalue, std::vecto
     /* 工作空间由 nevMax blockSize nevInit 决定 */
     /* 特征值 特征向量 长度为 nevMax */
     double* eval = eigenvalue.data();
-    void** evec;
+    void** evec; // 大小为：行数：矩阵行数；列数：最大特征值个数 nevMax
 
     ops->MultiVecCreateByMat(&evec, nevMax, A, ops);
     ops->MultiVecSetRandomValue(evec, 0, nevMax, ops);

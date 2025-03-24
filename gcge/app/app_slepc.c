@@ -86,6 +86,14 @@ static void MultiVecCreateByMat(BV *des_bv, int num_vec, Mat src_mat, struct OPS
      * @param num_vec BV 中基向量的数量（即 BV 的列数）
      */
     BVSetSizesFromVec(*des_bv, vector, num_vec);
+
+    // 备选设置方案 start
+    // PetscInt n, N;
+    // VecGetLocalSize(vector, &n);
+    // VecGetSize(vector, &N);
+    // BVSetSizes(*des_bv, n, N, num_vec);
+    // 备选设置方案 end
+
     /**
      * @brief 释放内存
      * @param Vec * 要释放的向量
@@ -125,6 +133,8 @@ static void MultiVecDestroy(BV *des_bv, int num_vec, struct OPS_ *ops) {
  * @param start 要查看的起始列索引
  * @param end 查看的列数
  * @param ops 未用到
+ * 
+ * @note MultiVecView 及类似的 BVView、MatView、VecView 等视图（View）函数默认只会在主进程（通常是 rank 0）执行一次，而不会在每个进程执行一次
  */
 static void MultiVecView(BV x, int start, int end, struct OPS_ *ops) {
     BVSetActiveColumns(x, start, end);
@@ -162,6 +172,7 @@ static void MultiVecLocalInnerProd(char nsdIP,
 
     const PetscScalar *x_array, *y_array;
     int x_nrows, x_ncols, y_nrows, y_ncols;
+    PetscInt x_ld, y_ld; // BV对象转换为array后的主维度
     /**
      * @brief 获取 BV 对象中基向量的只读数组的函数（const 限制）
      * @param x 要获取数组的 BV 对象
@@ -171,21 +182,23 @@ static void MultiVecLocalInnerProd(char nsdIP,
     /**
      * @brief 获取 BV 对象的维度信息
      * @param x 要获取维度信息的 BV 对象
-     * @param PetscInt *x_nrows 输出参数，指向 BV 中每个基向量的长度（行数）。如果不需要此信息，可以传入 NULL。
-     * @param PetscInt *NULL 输出参数，指向 BV 中基向量的数量（列数）。如果不需要此信息，可以传入 NULL。
-     * @param PetscInt *x_ncols 输出参数，指向 BV 的本地长度（在并行程序中，表示本地进程的向量长度）。
+     * @param PetscInt *x_nrows 输出参数，指向 BV 中每个基向量的本地长度（行数）。如果不需要此信息，可以传入 NULL（在并行程序中，表示本地进程的向量长度）。。
+     * @param PetscInt *NULL 输出参数，指向 BV 中基向量的全局长度（行数）。如果不需要此信息，可以传入 NULL。
+     * @param PetscInt *x_ncols 输出参数，指向 BV 的全局列数
      */
     BVGetSizes(x, &x_nrows, NULL, &x_ncols);
+    BVGetLeadingDimension(x, &x_ld);
     if (is_vec == 0) {
         BVGetArrayRead(y, &y_array);
         BVGetSizes(y, &y_nrows, NULL, &y_ncols);
+        BVGetLeadingDimension(y, &y_ld);
         LAPACKVEC x_vec, y_vec;
         x_vec.nrows = x_nrows;
         y_vec.nrows = y_nrows;
         x_vec.ncols = x_ncols;
         y_vec.ncols = y_ncols;
-        x_vec.ldd = x_nrows;
-        y_vec.ldd = y_nrows;
+        x_vec.ldd = x_ld;
+        y_vec.ldd = y_ld;
         x_vec.data = (double *)x_array;
         y_vec.data = (double *)y_array;
         ops->lapack_ops->MultiVecLocalInnerProd(nsdIP,
@@ -212,7 +225,22 @@ static void MultiVecLocalInnerProd(char nsdIP,
  */
 static void MultiVecSetRandomValue(BV x, int start, int end, struct OPS_ *ops) {
     BVSetActiveColumns(x, start, end);
+
+    // // 调试时使用的固定随机种子方法 start
+    // PetscRandom rand;
+    // PetscRandomCreate(PETSC_COMM_WORLD, &rand);
+    // // 设置固定的随机种子（例如1234）
+    // PetscRandomSetSeed(rand, 1234);
+    // // 重新初始化随机数生成器
+    // PetscRandomSeed(rand);
+    // // 调试时使用的固定随机种子方法 end
+
+    // 假设 bv 已经创建
     BVSetRandom(x);
+
+    // // 调试时使用的固定随机种子方法 start
+    // PetscRandomDestroy(&rand);
+    // // 调试时使用的固定随机种子方法 end
     return;
 }
 
@@ -235,6 +263,7 @@ static void MultiVecAxpby(double alpha, BV x,
     assert(end[0] - start[0] == end[1] - start[1]);
     PetscScalar *y_array;
     int x_nrows, x_ncols, y_nrows, y_ncols;
+    PetscInt x_ld, y_ld; // BV对象转换为array后的主维度
     /**
      * @brief 获取 BV 对象中基向量的可读写数组
      * @param BV 要获取数组的 BV 对象
@@ -242,10 +271,11 @@ static void MultiVecAxpby(double alpha, BV x,
      */
     BVGetArray(y, &y_array);
     BVGetSizes(y, &y_nrows, NULL, &y_ncols);
+    BVGetLeadingDimension(y, &y_ld);
     LAPACKVEC y_vec;
     y_vec.nrows = y_nrows;
     y_vec.ncols = y_ncols;
-    y_vec.ldd = y_nrows;
+    y_vec.ldd = y_ld;
     y_vec.data = y_array;
     if (x == NULL) {
 #if 0
@@ -288,9 +318,10 @@ static void MultiVecAxpby(double alpha, BV x,
             LAPACKVEC x_vec;
             BVGetArrayRead(x, &x_array);
             BVGetSizes(x, &x_nrows, NULL, &x_ncols);
+            BVGetLeadingDimension(x, &x_ld);
             x_vec.nrows = x_nrows;
             x_vec.ncols = x_ncols;
-            x_vec.ldd = x_nrows;
+            x_vec.ldd = x_ld;
             x_vec.data = (double *)x_array;
             ops->lapack_ops->MultiVecAxpby(alpha,
                                            (void **)&x_vec, beta, (void **)&y_vec, start, end, ops->lapack_ops);
@@ -477,13 +508,14 @@ static void MultiVecLinearComb(BV x, BV y, int is_vec,
     assert(is_vec == 0);
     PetscScalar *y_array;
     int x_nrows, x_ncols, y_nrows, y_ncols;
-
+    PetscInt x_ld, y_ld; // BV对象转换为array后的主维度
     BVGetArray(y, &y_array);
     BVGetSizes(y, &y_nrows, NULL, &y_ncols);
+    BVGetLeadingDimension(y, &y_ld);
     LAPACKVEC y_vec;
     y_vec.nrows = y_nrows;
     y_vec.ncols = y_ncols;
-    y_vec.ldd = y_nrows;
+    y_vec.ldd = y_ld;
     y_vec.data = (double *)y_array;
     if (x == NULL) {
         ops->lapack_ops->MultiVecLinearComb(
@@ -495,9 +527,10 @@ static void MultiVecLinearComb(BV x, BV y, int is_vec,
         LAPACKVEC x_vec;
         BVGetArrayRead(x, &x_array);
         BVGetSizes(x, &x_nrows, NULL, &x_ncols);
+        BVGetLeadingDimension(x, &x_ld);
         x_vec.nrows = x_nrows;
         x_vec.ncols = x_ncols;
-        x_vec.ldd = x_nrows;
+        x_vec.ldd = x_ld;
         x_vec.data = (double *)x_array;
         ops->lapack_ops->MultiVecLinearComb(
             (void **)&x_vec, (void **)&y_vec, is_vec,

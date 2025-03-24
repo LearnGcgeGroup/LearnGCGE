@@ -122,9 +122,10 @@ static void InitializeX(void **V, void **ritz_vec, void *B, int nevGiven) {
 #endif
     int start[2], end[2];
     start[0] = 0;
-    end[0] = nevGiven;
+    end[0] = nevGiven; // 输入为0
     start[1] = 0;
-    end[1] = nevGiven;
+    end[1] = nevGiven; // 输入为0
+    // 将ritz_vec的前nevGiven列复制到V的前nevGiven列
     ops_gcg->MultiVecAxpby(1.0, ritz_vec, 0, V, start, end, ops_gcg);
 #if DEBUG
     ops_gcg->Printf("V\n");
@@ -159,6 +160,7 @@ static void InitializeX(void **V, void **ritz_vec, void *B, int nevGiven) {
 
     // 对V的前nevGiven列进行B-正交化
     // V中的任意两个列向量 u 和 v，若满足 u^T Bv=0，则称 u 和 v 关于矩阵 B 正交。
+    // 第一次运行时，nevGiven = 0，直接返回
     ops_gcg->MultiVecOrth(V, 0, &nevGiven, B, ops_gcg);
     // MultiVecSetRandomValue(void **x, int start, int end, struct OPS_ *ops)
     ops_gcg->MultiVecSetRandomValue(V, nevGiven, sizeX, ops_gcg);
@@ -1040,7 +1042,7 @@ static void ComputeW12(void **V, void *A, void *B,
     }
 
 #if DEBUG
-    ops_gcg->Printf("V\n")
+    ops_gcg->Printf("V\n");
         ops_gcg->MultiVecView(V, startW, endW, ops_gcg);
 #endif
 
@@ -1918,6 +1920,7 @@ void EigenSolverCreateWorkspace_GCG(
     int sizeV = nevMax + 2 * block_size;
     ops->MultiVecCreateByMat(&mv_ws[0], sizeV, mat, ops);
     ops->MultiVecSetRandomValue(mv_ws[0], 0, sizeV, ops);
+    // slepc中的BV创建时，默认是跨进程共享的，数据是分布式存储的。
     ops->MultiVecCreateByMat(&mv_ws[1], block_size, mat, ops);
     ops->MultiVecSetRandomValue(mv_ws[1], 0, block_size, ops);
     ops->MultiVecCreateByMat(&mv_ws[2], block_size, mat, ops);
