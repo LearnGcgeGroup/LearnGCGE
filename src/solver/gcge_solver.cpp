@@ -10,6 +10,7 @@
 #include <limits>
 #include <memory>
 #include <omp.h>
+#include <vector>
 
 extern "C" {
 #include "app_ccs.h"
@@ -144,12 +145,15 @@ int eigenSolverGCG(void* A, void* B, std::vector<double>& eigenvalue, std::vecto
     eigenvector.resize(nevConv);
     ops->Printf("eigenvectors\n");
     for (auto i = 0; i < nevConv; ++i) {
-        std::cout << "index: " << i + 1 << " eigenvalue: " << eigenvalue[i] << std::endl;
+        ops->Printf("index: %d eigenvalue: %e\n", i + 1, eval[i]);
     }
     //ops->MultiVecView(evec,0,nevConv,ops);
 
+#ifdef USE_SLEPC
+    multiVecReturn((BV)(evec), eigenvalue.size(), eigenvector); // 需先进行类型转化
+#else
     multiVecReturn((LAPACKVEC*)(evec), eigenvalue.size(), eigenvector); // 需先进行类型转化
-
+#endif // USE_SLEPC
     ops->MultiVecDestroy(&(evec), nevMax, ops);
     return 0;
 }
@@ -177,3 +181,29 @@ void multiVecReturn(LAPACKVEC* x, int end, std::vector<std::vector<double>>& eig
     }
     return;
 }
+
+#ifdef USE_SLEPC
+void multiVecReturn(BV bv, int count, std::vector<std::vector<double>>& eigenvector) {
+    // std::cout << "multiVecReturn(BV, int, std::vector<std::vector<double>>)" << std::endl;
+    // PetscInt m, n;
+    // BVGetSizes(bv,&m, nullptr, &n); // 获取 BV 维度，其中 m 是行数, n是列数
+    // std::cout << "m = " << m << ", n = " << n << std::endl;
+    // count = PetscMin(count, n); // 防止超出 BV 实际列数
+    // eigenvector.resize(count, std::vector<double>(m)); // 为前 count 列分配空间
+
+    // for (int j = 0; j < count; ++j) {
+    //     Vec v;
+    //     const PetscScalar* array;
+
+    //     BVGetColumn(bv, j, &v);                // 获取 BV 的第 j 列（Vec）
+    //     VecGetArrayRead(v, &array);            // 访问 Vec 的数据
+
+    //     for (PetscInt i = 0; i < m; ++i) {
+    //         eigenvector[j][i] = array[i]; // 复制数据到 std::vector<double>
+    //     }
+
+    //     VecRestoreArrayRead(v, &array);        // 释放访问权限
+    //     BVRestoreColumn(bv, j, &v);            // 归还 Vec
+    // }
+}
+#endif // USE_SLEPC

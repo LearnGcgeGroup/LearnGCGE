@@ -12,6 +12,10 @@
 #include <vector>
 #include "io/param_struct.h" // 将求解参数结构体定义单独放置在一个文件中
 
+#ifdef USE_SLEPC
+#include <slepcbv.h>
+#endif // USE_SLEPC
+
 extern "C" {
 #include "app_ccs.h"
 }
@@ -33,11 +37,22 @@ int eigenSolverGCG(void* A, void* B, std::vector<double>& eigenvalue, std::vecto
 /**
  * @brief 将特征向量集存储在二维数组中
  * 
- * @param x 特征向量集
+ * @param x LAPACKVEC形式的特征向量集
  * @param end 特征向量个数
  * @param eigenvector 二维数组
  */
 void multiVecReturn(LAPACKVEC* x, int end, std::vector<std::vector<double>>& eigenvector);
+
+#ifdef USE_SLEPC
+/**
+ * @brief 将特征向量集存储在二维数组中
+ * @todo 暂未实现
+ * @param x BV形式的特征向量集
+ * @param end 特征向量个数
+ * @param eigenvector 二维数组
+ */
+void multiVecReturn(BV bv, int count, std::vector<std::vector<double>>& eigenvector);
+#endif // USE_SLEPC
 
 /**
  * @brief 析构CCS格式的矩阵

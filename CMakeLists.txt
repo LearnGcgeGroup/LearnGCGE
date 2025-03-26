@@ -12,6 +12,10 @@ if(NOT CMAKE_BUILD_TYPE)
     "MinSizeRel" "RelWithDebInfo")
 endif()
 
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_definitions(-DUSE_SLEPC) # 当前仅在 Linux（Ubuntu）上使用slepc
+endif()
+
 if(UNIX)
     set(3RD_LIB_PATH ${PROJECT_SOURCE_DIR}/3rd/ubuntu)
 elseif(WIN32)

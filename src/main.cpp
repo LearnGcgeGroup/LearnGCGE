@@ -173,5 +173,6 @@ int main(int argc, char *argv[])
 #elif OPS_USE_MPI
     MPI_Finalize();
 #endif
+    std::cout << "GCGE solver finished!" << std::endl;
     return 0;
 }
