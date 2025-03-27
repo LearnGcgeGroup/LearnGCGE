@@ -52,11 +52,10 @@ public:
      * @brief 读取用户设置的求解参数txt文档
      *
      * @param param GcgeParam的结构体对象
-     * @param method 抽取方法参数保存的结构体
      * @param paramFileName 求解参数文件名称
      * @return GcgeErrCode 错误码
      */
-    static GcgeErrCode readUserParam(GcgeParam& param, ExtractMethod& method, std::string paramFileName = "usrParam.txt");
+    static GcgeErrCode readUserParam(GcgeParam& param, std::string paramFileName = "usrParam.txt");
 
     /**
      * @brief 将petsc格式的矩阵转换为CCS格式的矩阵

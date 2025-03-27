@@ -61,8 +61,16 @@ typedef struct GCGSolver_ {
 
 	int    compRR_min_num     ; 
 	double compRR_min_gap; 
-	double compRR_tol; 			/*tol for dsyevx_ */	
-	
+	double compRR_tol; 			/*tol for dsyevx_ */
+
+    enum EigenValueExtractType {
+        GCGE_BY_ORDER = 0,               // 通过设置阶数提取
+        GCGE_BY_FREQUENCY = 1,           // 通过设置频率提取
+        GCGE_BY_ORDER_AND_FREQUENCY = 2  // 通过设置阶数和频率提取
+    } extract_type;  // 特征值提取方式
+    double min_eigenvalue;  // 最小特征值
+    double max_eigenvalue;  // 最大特征值
+
 } GCGSolver;
 
 void EigenSolverSetup_GCG(
@@ -95,5 +103,26 @@ void EigenSolverSetParameters_GCG(
 
 void EigenSolverSetParametersFromCommandLine_GCG(
 	int argc, char* argv[], struct OPS_ *ops);
+
+
+
+// 共享数据临时方案
+typedef struct {
+    int* sizeN_ptr;  // 存储指向sizeN的指针
+    int* startN_ptr;  // 存储指向startN的指针
+    int* endN_ptr;  // 存储指向endN的指针
+    int* sizeP_ptr;  // 存储指向sizeP的指针
+    int* startP_ptr;  // 存储指向startP的指针
+    int* endP_ptr;  // 存储指向endP的指针
+    int* sizeW_ptr;  // 存储指向sizeW的指针
+    int* startW_ptr;  // 存储指向startW的指针
+    int* endW_ptr;  // 存储指向endW的指针
+    int* sizeC_ptr;  // 存储指向sizeC的指针
+    int* sizeX_ptr;  // 存储指向sizeX的指针
+    int* sizeV_ptr;  // 存储指向sizeV的指针
+    int* endX_ptr;  // 存储指向endX的指针
+    // 其他需要共享的指针...
+} RangeSharedData;
+
 #endif  /* -- #ifndef _OPS_EIG_SOL_GCG_H_ -- */
 

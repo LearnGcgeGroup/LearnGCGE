@@ -11,6 +11,7 @@
 #include <memory>
 #include <omp.h>
 #include <vector>
+#include <cmath>
 
 extern "C" {
 #include "app_ccs.h"
@@ -115,6 +116,13 @@ int eigenSolverGCG(void* A, void* B, std::vector<double>& eigenvalue, std::vecto
                                  compW_orth_zero_tol, compW_bpcg_max_iter, compW_bpcg_rate, compW_bpcg_tol,
                                  compW_bpcg_tol_type, 0, // without shift
                                  compRR_min_num, compRR_min_gap, compRR_tol, ops);
+
+    // 适配按范围求解特征值的数据
+    struct GCGSolver_* gcgsolver;
+    gcgsolver = (GCGSolver*)ops->eigen_solver_workspace;
+    gcgsolver->extract_type = (GCGSolver_::EigenValueExtractType)gcgeparam->extMethod.extractType;
+    gcgsolver->min_eigenvalue = std::pow(gcgeparam->extMethod.minFreq * 2 * M_PI, 2);
+    gcgsolver->max_eigenvalue = std::pow(gcgeparam->extMethod.maxFreq * 2 * M_PI, 2);
 
     /* 命令行获取 GCG 的算法参数 勿用 有 BUG, 
 	 * 不应该改变 nevMax nevInit block_size, 这些与工作空间有关 */

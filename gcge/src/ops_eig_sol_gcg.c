@@ -42,6 +42,22 @@ static int *int_ws;
 static struct OPS_ *ops_gcg;
 static struct GCGSolver_ *gcg_solver;
 
+RangeSharedData rangeSharedData = {
+    .sizeN_ptr = &sizeN,
+    .startN_ptr = &startN,
+    .endN_ptr = &endN,
+    .sizeP_ptr = &sizeP,
+    .startP_ptr = &startP,
+    .endP_ptr = &endP,
+    .sizeW_ptr = &sizeW,
+    .startW_ptr = &startW,
+    .endW_ptr = &endW,
+    .sizeC_ptr = &sizeC,
+    .sizeX_ptr = &sizeX,
+    .sizeV_ptr = &sizeV,
+    .endX_ptr = &endX,
+};
+
 #if 0
 static double tmp_sigma[200];
 #endif
@@ -653,13 +669,13 @@ static void ComputeW(void **V, void *A, void *B,
         // 论文中b = (lambda - sigma) Bx，是否有影响?
         /* shift eigenvalues with sigma */
         for (i = start[0]; i < end[0]; ++i)
-            ss_eval[i] += sigma;
+            ss_eval[i] += (gcg_solver->extract_type == GCGE_BY_ORDER) ? sigma : 0.0; // 适配按范围求解特征值
         ops_gcg->MultiVecLinearComb(NULL, b, 0, start, end,
                                     NULL, 0, ss_eval + start[0], 1, ops_gcg);
         dcopy(&length, ss_eval + start[0], &inc, destin, &inc);
         /* recover eigenvalues */
         for (i = start[0]; i < end[0]; ++i)
-            ss_eval[i] -= sigma;
+            ss_eval[i] -= (gcg_solver->extract_type == GCGE_BY_ORDER) ? sigma : 0.0; // 适配按范围求解特征值
 
 #if 0
 		/* 20210530 Ax = lambda Bx - theta Ax */

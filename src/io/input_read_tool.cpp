@@ -38,7 +38,7 @@ GcgeErrCode InputReadTool::ReadPetscMatFromMtx(Mat* petsc_matA, char* file_matri
     return GCGE_SUCCESS;
 }
 
-GcgeErrCode InputReadTool::readUserParam(GcgeParam& param, ExtractMethod& method, std::string paramFileName) {
+GcgeErrCode InputReadTool::readUserParam(GcgeParam& param, std::string paramFileName) {
     if (paramFileName.empty()) {
         std::cerr << "Error: paramFileName is empty." << std::endl;
         return GCGE_ERR_FILE;
@@ -60,11 +60,11 @@ GcgeErrCode InputReadTool::readUserParam(GcgeParam& param, ExtractMethod& method
     std::getline(inFile, line);
     int type = obtainIntNumber(line);
     if (type == 0) {
-        method.extractType = BY_ORDER;
+        param.extMethod.extractType = BY_ORDER;
     } else if (type == 1) {
-        method.extractType = BY_FREQUENCY;
+        param.extMethod.extractType = BY_FREQUENCY;
     } else if (type == 2) {
-        method.extractType = BY_ORDER_AND_FREQUENCY;
+        param.extMethod.extractType = BY_ORDER_AND_FREQUENCY;
     } else {
         std::cerr << "Error: extractMethod only support [0, 1, 2]" << std::endl;
         return GCGE_ERR_INPUT;
@@ -73,17 +73,17 @@ GcgeErrCode InputReadTool::readUserParam(GcgeParam& param, ExtractMethod& method
     // 3.处理extractionOrder: <uint32_t>
     std::getline(inFile, line);
     int order = obtainIntNumber(line);
-    method.extractOrder = order;
+    param.extMethod.extractOrder = order;
 
     // 4.处理minFreq: <double>
     std::getline(inFile, line);
     double minFreq = obtainDoubleNumber(line);
-    method.minFreq = minFreq;
+    param.extMethod.minFreq = minFreq;
 
     // 5.处理maxFreq: <double>
     std::getline(inFile, line);
     double maxFreq = obtainDoubleNumber(line);
-    method.maxFreq = maxFreq;
+    param.extMethod.maxFreq = maxFreq;
 
     // 6.处理maxIteration: <uint32_t>
     std::getline(inFile, line);
