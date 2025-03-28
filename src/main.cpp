@@ -12,6 +12,7 @@
 #include "io/read_user_param.h"
 #include "io/input_read_tool.h"
 #include "error_code.h"
+#include "solver/count_eigen_num.h"
 
 #include <petscmat.h>
 
@@ -93,8 +94,8 @@ int main(int argc, char *argv[])
 
     // 按区间范围求解特征值时: extractOrder = CountEigsInRange(A, B, a, b)
     if (gcgeparam.extMethod.extractType == BY_FREQUENCY) {
-        // CountEigenNum::countEigenNum(A, B, std::pow(gcgeparam->extMethod.minFreq * 2 * M_PI, 2),
-            // std::pow(gcgeparam->extMethod.maxFreq * 2 * M_PI, 2), gcgeparam.extMethod.extractOrder);
+        CountEigenNum::countEigenNum(static_cast<void*>(sourceMatA), static_cast<void*>(sourceMatB), std::pow(gcgeparam.extMethod.minFreq * 2 * M_PI, 2),
+        std::pow(gcgeparam.extMethod.maxFreq * 2 * M_PI, 2), gcgeparam.extMethod.extractOrder);    
     }
 
     // 2、设置工作空间
