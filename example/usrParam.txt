@@ -10,7 +10,7 @@
 % initBlock: <uint32_t>, Initial block size for eigenvalue computation. Default: 20.
 % pWBlock: <uint32_t>, Projection subspace block size. Default: 10.
 %--------------------------------------------------------------------------------------------------------------------------------------------------------------
-extractionMethod: 0
+extractionMethod: 1
 extractionOrder: 20
 minFreq: 1
 maxFreq: 1000

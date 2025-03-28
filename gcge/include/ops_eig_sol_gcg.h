@@ -25,7 +25,7 @@ typedef struct GCGSolver_ {
 	double gapMin; // 两个特征值间认为不是重根的最小间隔
 	int    nevInit; // 初始选取X矩阵的列数
 	int   nevGiven; // 当前批次求解前，收敛特征对的总个数
-	int    nevConv;	// 当前批次求解后，收敛特征对的总个数
+	int    nevConv;	// 做输入参数: 期望收敛的特征值个数; 做输出参数: 当前批次求解后，收敛特征对的总个数
 	int    block_size; // 分块矩阵W或P的列数，预估大于所要求解的特征值的最大代数重数
 	double tol[2] ; // 0: abs_tol, 1: rel_tol
 	int numIterMax; // 最大迭代次数
