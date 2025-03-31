@@ -101,6 +101,16 @@ static void SolveLinearSystemsWithBV(KSP ksp, BV *B, BV *X) {
 
 void ComputeRangeRayleighRitz(double *ss_matA, double *ss_eval, double *ss_evec, double tol,
                               int nevConv, double *ss_diag, void *A, void *B, void **V, struct OPS_ *ops) {
+    // 0、更新参数
+    sizeV = sizeX + sizeP + sizeW;
+    // 通过nevConv更新N与sizeC：nevConv - sizeC为新增的收敛特征值个数
+    startN = startN + (nevConv - sizeC); // startN从未收敛的第一个特征值开始
+    endN = endN + (nevConv - sizeC);
+    endN = (endN < endX) ? endN : endX;
+
+    sizeN = endN - startN;
+    sizeC = nevConv;
+
     // 1、先计算Y = B V部分，并存储之后复用：暂时每次调用都创建，之后将此部分内存移出复用内存空间
     BV Y; // SLEPc 多向量
     int num_vec = *rangeSharedData.sizeV_ptr - *rangeSharedData.sizeC_ptr;
@@ -236,15 +246,6 @@ void ComputeRangeRayleighRitz(double *ss_matA, double *ss_eval, double *ss_evec,
     // 6、计算特征值
     int nrows, ncols, nrowsA, ncolsA, length, incx, incy, idx, start[2], end[2];
     double *source, *destin, alpha;
-
-    sizeV = sizeX + sizeP + sizeW;
-    // 通过nevConv更新N与sizeC：nevConv - sizeC为新增的收敛特征值个数
-    startN = startN + (nevConv - sizeC); // startN从未收敛的第一个特征值开始
-    endN = endN + (nevConv - sizeC);
-    endN = (endN < endX) ? endN : endX;
-
-    sizeN = endN - startN;
-    sizeC = nevConv;
 
     /* 已收敛部分C不再考虑，更新 ss_mat ss_evec 起始地址*/
     // 由于sizeC大小变更，ss_matA与ss_evec均向后平移相应位置

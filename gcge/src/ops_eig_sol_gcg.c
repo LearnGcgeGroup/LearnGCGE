@@ -324,7 +324,7 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec,
 #if PRINT_FIRST_UNCONV
                 ops_gcg->Printf("GCG: [%d] %6.14e (%6.4e, %6.4e)\n",
                                 startN + idx, new_memory[idx],
-                                inner_prod[idx], inner_prod[idx] / fabs(ss_eval[startN + idx]));
+                                inner_prod[idx], inner_prod[idx] / fabs(new_memory[idx]));
 #endif
                 break;
             }
@@ -333,7 +333,7 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec,
 #if PRINT_FIRST_UNCONV
                 ops_gcg->Printf("GCG: [%d] %6.14e (%6.4e, %6.4e)\n",
                                 startN + idx, new_memory[idx],
-                                inner_prod[idx], inner_prod[idx] / fabs(ss_eval[startN + idx]));
+                                inner_prod[idx], inner_prod[idx] / fabs(new_memory[idx]));
 #endif
                 break;
             }
@@ -727,7 +727,7 @@ static void ComputeW(void **V, void *A, void *B,
     }
     // 更新W矩阵的结束位置，W中放置的是未收敛的特征向量对应的b = (lambda+sigma) Bx向量
     endW = startW + block_size;
-
+    printf("    startW:%d, endW:%d \n", startW, endW);
     /* 3）solve x */
     start[0] = offset[1]; // 这里为什么是offset[1]，表示从第一个未收敛的区间起始位置开始计算？
     end[0] = start[0] + block_size;
