@@ -24,5 +24,14 @@ public:
      * @return GcgeErrCode 错误码
      */
     static GcgeErrCode countEigenNum(void *A, void *B, double a, double b, int &numEigen);
+
+    /**
+     * @brief 矩阵预处理操作(分别作DAD和DBD矩阵操作)，D为构造矩阵
+     * 
+     * @param A 矩阵引用   A*x = lamda*B*x 
+     * @param B 矩阵引用   A*x = lamda*B*x 
+     * @return GcgeErrCode 错误码
+     */
+    static GcgeErrCode processMatDAD(Mat &A, Mat &B);
 };
 #endif // __GCG_INTERVAL_COUNT_EIGEN_NUM_H__

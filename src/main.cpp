@@ -97,6 +97,10 @@ int main(int argc, char *argv[])
         CountEigenNum::countEigenNum(static_cast<void*>(sourceMatA), static_cast<void*>(sourceMatB), std::pow(gcgeparam.extMethod.minFreq * 2 * M_PI, 2),
         std::pow(gcgeparam.extMethod.maxFreq * 2 * M_PI, 2), gcgeparam.extMethod.extractOrder);    
     }
+
+    // 刚度矩阵和质量矩阵预处理DKD，DMD(此功能暂时设置在CountEigenNum类中,支持并行时再调整)
+    CountEigenNum::processMatDAD(sourceMatA, sourceMatB);
+
     // 2、设置工作空间
     OPS* ccs_ops = NULL;
     OPS_Create(&ccs_ops);

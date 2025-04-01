@@ -68,3 +68,20 @@ GcgeErrCode CountEigenNum::countEigenNum(void *A, void *B, double a, double b, i
 
     return GCGE_SUCCESS;
 }
+
+GcgeErrCode CountEigenNum::processMatDAD(Mat &A, Mat &B) {
+    Vec diag;                   // 向量
+    MatCreateVecs(A, &diag, NULL);
+    MatGetDiagonal(A, diag);    // 对角线向量
+    VecSqrtAbs(diag);           // 开方运算
+    VecReciprocal(diag);        // 倒数运算
+
+    MatDiagonalScale(A, diag, diag);   // DAD
+    MatDiagonalScale(B, diag, diag);   // DBD
+
+    // MatView(A, PETSC_VIEWER_STDOUT_WORLD);    // 可视化DAD效果
+    // MatView(B, PETSC_VIEWER_STDOUT_WORLD);    // 可视化DBD效果
+
+    VecDestroy(&diag);
+    return GCGE_SUCCESS;
+} 
