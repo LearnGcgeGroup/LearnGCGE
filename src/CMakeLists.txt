@@ -47,6 +47,7 @@ file(GLOB_RECURSE ALL_SOURCES "*.cpp" "*.c" "*.h")
 add_executable(test     ${ALL_SOURCES})
 
 target_link_libraries(test PRIVATE 
+    "${SLEPC_DIR}/lib/libslepc.a"     # SLEPC需要放在PETSC之前
     "${PETSC_DIR}/lib/libpetsc.a"     # PETSC # todo: 这样写存在链接错误，为什么
     GCGE
     MPI::MPI_C          # MPI C 库， # todo: 采用${MPI_C_LIBRARIES}会失败，为什么
@@ -59,7 +60,6 @@ target_link_libraries(test PRIVATE
 
 if(UNIX)
     target_link_libraries(test PRIVATE 
-        "${SLEPC_DIR}/lib/libslepc.a"     # SLEPC需要放在PETSC之前
         m                   # petsc需要的库
         mpifort
         mpi
