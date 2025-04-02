@@ -17,9 +17,9 @@
 
 #if OPS_USE_SLEPC
 
-#include	<petscoptions.h>
 #include	<petscviewer.h>
 #include	<petscsys.h>
+#include	<petscoptions.h>
 #include	<petscmat.h>
 #include	<petscvec.h>
 #include	<petscksp.h>

@@ -50,6 +50,7 @@ find_package(OpenBLAS REQUIRED)
 # )
 
 target_link_libraries(GCGE PRIVATE 
+    "${SLEPC_DIR}/lib/libslepc.a"     # SLEPC需要放在PETSC之前
     "${PETSC_DIR}/lib/libpetsc.a"     # PETSC # todo: 这样写存在链接错误，为什么
     MPI::MPI_C          # MPI C 库， # todo: 采用${MPI_C_LIBRARIES}会失败，为什么
     OpenBLAS::OpenBLAS  # OpenBLAS
@@ -61,7 +62,6 @@ target_link_libraries(GCGE PRIVATE
 
 if(UNIX)
     target_link_libraries(GCGE PRIVATE 
-        "${SLEPC_DIR}/lib/libslepc.a"     # SLEPC需要放在PETSC之前
         m                   # petsc需要的库
         mpifort
         mpi

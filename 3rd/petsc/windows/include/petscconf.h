@@ -12,7 +12,7 @@
 #define PETSC_DEPRECATED_MACRO_BASE_(why) _Pragma(#why)
 #define PETSC_DEPRECATED_OBJECT_BASE(string_literal_why) __attribute__((deprecated(string_literal_why)))
 #define PETSC_DEPRECATED_TYPEDEF_BASE(string_literal_why) __attribute__((deprecated(string_literal_why)))
-#define PETSC_DIR "/f/zzy/petsc"
+#define PETSC_DIR "/d/installedCode/petsc"
 #define PETSC_DIR_SEPARATOR '/'
 #define PETSC_FORTRAN_CHARLEN_T size_t
 #define PETSC_FORTRAN_TYPE_INITIALIZE  = -2
@@ -136,7 +136,7 @@
 #define PETSC_IS_COLORING_VALUE_TYPE short
 #define PETSC_IS_COLORING_VALUE_TYPE_F integer2
 #define PETSC_LEVEL1_DCACHE_LINESIZE 32
-#define PETSC_LIB_DIR "/f/zzy/petsc/lib"
+#define PETSC_LIB_DIR "/d/installedCode/petsc/lib"
 #define PETSC_MAX_PATH_LEN 260
 #define PETSC_MEMALIGN 16
 #define PETSC_MISSING_GETLINE 1
@@ -155,7 +155,7 @@
 #define PETSC_MISSING_SIGURG 1
 #define PETSC_MISSING_SIGUSR1 1
 #define PETSC_MISSING_SIGUSR2 1
-#define PETSC_MPICC_SHOW "cc.exe -IC:/msys2/mingw64/include -LC:/msys2/mingw64/lib -l:libmsmpi.dll.a"
+#define PETSC_MPICC_SHOW "cc.exe -ID:/msys64/mingw64/include -LD:/msys64/mingw64/lib -l:libmsmpi.dll.a"
 #define PETSC_MPIU_IS_COLORING_VALUE_TYPE MPI_UNSIGNED_SHORT
 #define PETSC_NEEDS_UTYPE_TYPEDEFS 1
 #define PETSC_OMAKE "/usr/bin/make --no-print-directory"
