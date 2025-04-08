@@ -279,24 +279,36 @@ static void ComputeRitzVec(void **ritz_vec, void **V, double *ss_evec, double *s
  * 
  * @param inner_prod 内积
  * @param tol 容差
- * @param ss_eval 特征值(包含了偏移量)
+ * @param res_ref2  相当容错分母部分
  * @param idx 特征值索引
  * @return int 1: 收敛; 0: 不收敛
  */
-int eigen_is_convergent(double* inner_prod, double* tol, double* ss_eval, int idx) {
-    if (inner_prod[idx] < tol[0] || inner_prod[idx] < ss_eval[startN + idx] * tol[1]) {
+int eigen_is_convergent(double* inner_prod, double* tol, double* res_ref2, int idx) {
+    if (inner_prod[idx] < tol[0] || inner_prod[idx] < res_ref2[idx] * tol[1]) {
         return 1;
     }
     return 0;
 }
+// int eigen_is_convergent(double* inner_prod, double* tol, double* ss_eval, int idx) {
+//     if (inner_prod[idx] < tol[0] || inner_prod[idx] < ss_eval[startN + idx] * tol[1]) {
+//         return 1;
+//     }
+//     return 0;
+// }
 
 typedef struct {
     double *inner_prod; // 用于检查收敛性
     double *tol; // 收敛容差
+    double *res_ref2;   // 用于相对容错收敛
     double *ss_eval; // 特征值, 用于检查收敛性
     double center; // 中点值
 } EigenCompareContext;
-
+// typedef struct {
+//     double *inner_prod; // 用于检查收敛性
+//     double *tol; // 收敛容差
+//     double *ss_eval; // 特征值, 用于检查收敛性
+//     double center; // 中点值
+// } EigenCompareContext;
 /**
  * @brief 比较两个特征值的收敛性及大小，用于排序
  * @note 收敛的放前面，未收敛的放后面(按距离中点的距离排序);
@@ -314,9 +326,9 @@ int compareEigenValue(const void *p1, const void *p2, void *context) {
     const EigenCompareContext *ctx = (const EigenCompareContext *)context;
     int idx1 = *(const int *)p1;
     int idx2 = *(const int *)p2;
-    int conv_a = eigen_is_convergent(ctx->inner_prod, ctx->tol, ctx->ss_eval, idx1);
-    int conv_b = eigen_is_convergent(ctx->inner_prod, ctx->tol, ctx->ss_eval, idx2);
-    // 如果都是收敛的
+    int conv_a = eigen_is_convergent(ctx->inner_prod, ctx->tol, ctx->res_ref2, idx1);
+    int conv_b = eigen_is_convergent(ctx->inner_prod, ctx->tol, ctx->res_ref2, idx2);
+    // res_ref2
     if (conv_a && conv_b) {
         return idx1 - idx2; // 保持原顺序
     } else if (conv_a) {
@@ -393,13 +405,21 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec, 
     ops_gcg->MultiVecAxpby(-1.0, mv_ws[1], 1.0, mv_ws[0], start, end, ops_gcg);
     /* 不使用 ss_evec 部分 */
     inner_prod = dbl_ws + (sizeV - sizeC) * sizeW; // inner_prod为内积结果的存储首地址
+    
+    // 分母部分数据(改成与Matlab一致的相对误差检测)
+    double *res_ref2 = malloc((sizeV - sizeC) * sizeW * sizeof(double));
+    ops_gcg->MultiVecInnerProd('D', mv_ws[1], mv_ws[1], 0,
+                               start, end, res_ref2, 1, ops_gcg);
+    
     // 计算numCheck个残差向量的2范数的平方
     ops_gcg->MultiVecInnerProd('D', mv_ws[0], mv_ws[0], 0,
                                start, end, inner_prod, 1, ops_gcg);
     // 计算numCheck个残差向量的2范数
     for (idx = 0; idx < numCheck; ++idx) {
         inner_prod[idx] = sqrt(inner_prod[idx]);
+        res_ref2[idx] = sqrt(res_ref2[idx]);
     }
+
     // ##############################################将求解的特征值排序 start###########################################
     int *resortedIndex = malloc(numCheck * sizeof(int));   // 重排序的索引数组
     for (int i = 0; i < numCheck; i++) {
@@ -408,6 +428,7 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec, 
     EigenCompareContext eigenCompareContext = {
         .inner_prod = inner_prod,
         .tol = tol,
+        .res_ref2 = res_ref2,
         .ss_eval = ss_eval,
         .center = (gcg_solver->min_eigenvalue + gcg_solver->max_eigenvalue) / 2.0
     };
@@ -421,14 +442,14 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec, 
 #if 1
         ops_gcg->Printf("    GCG: [%d] %6.14e (%6.4e, %6.4e)\n",
                         startN + idx, ss_eval[startN + resortedIndex[idx]],
-                        inner_prod[resortedIndex[idx]], inner_prod[resortedIndex[idx]] / fabs(ss_eval[startN + resortedIndex[idx]]));
+                        inner_prod[resortedIndex[idx]], inner_prod[resortedIndex[idx]] / res_ref2[resortedIndex[idx]]);
 #endif
     }
     // 计算收敛个数
     int curConvNum = 0; // 当前轮次收敛的数目
     for (idx = 0; idx < numCheck; ++idx) {
         int i = resortedIndex[idx]; // 获取排序后的索引
-        if (inner_prod[i] < tol[0] || inner_prod[i] < ss_eval[startN + i] * tol[1]) {
+        if (inner_prod[i] < tol[0] || inner_prod[i] < res_ref2[i] * tol[1]) {
             curConvNum++;
             if (ss_eval[startN + i] >= gcg_solver->min_eigenvalue && ss_eval[startN + i] <= gcg_solver->max_eigenvalue) {
                 (*range_nevConv)++;
@@ -437,6 +458,9 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec, 
             break; // 遇到未收敛的特征值，停止循环
         }
     }
+
+    free(res_ref2); // 释放相对误差分母部分数据
+
     // 计算当前收敛的特征值总个数
     nevConv = sizeC + curConvNum;
     printf("    curConvNum: %d, nevConv: %d, range_nevConv: %d \n", curConvNum, nevConv, *range_nevConv);
@@ -471,6 +495,7 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec, 
     memcpy(ss_eval + startN, tempData, numCheck * sizeof(double));
     memcpy(inner_prod, tempDatainner_prod, numCheck * sizeof(double));
     memcpy(ss_evec, tempMatrix, (sizeV - sizeC) * numCheck * sizeof(double));
+
     // 释放临时空间
     free(tempData);
     free(tempDatainner_prod);
@@ -2068,7 +2093,7 @@ static void GCG(void *A, void *B, double *eval, void **evec,
         ComputeRitzVec(ritz_vec, V, ss_evec, ss_eval);
 
         ++numIter;
-    } while (numIter < numIterMax);
+    } while (numIter < 30);
 
     gcg_solver->numIter = numIter + (gcg_solver->numIterMax - numIterMax);
     /* eval evec 都是 sizeX 长 */
