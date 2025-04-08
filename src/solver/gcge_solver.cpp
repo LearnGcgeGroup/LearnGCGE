@@ -144,7 +144,8 @@ int eigenSolverGCG(void* A, void* B, std::vector<double>& eigenvalue, std::vecto
     eigenvector.resize(nevConv);
     ops->Printf("eigenvectors\n");
     for (auto i = 0; i < nevConv; ++i) {
-        std::cout << "index: " << i + 1 << " eigenvalue: " << eigenvalue[i] << std::endl;
+        ops->Printf("index: %d eigenvalue: %e\n", i + 1, eval[i]);
+        // std::cout << "index: " << i + 1 << " eigenvalue: " << eigenvalue[i] << std::endl;
     }
     //ops->MultiVecView(evec,0,nevConv,ops);
 
