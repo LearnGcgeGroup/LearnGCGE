@@ -272,12 +272,16 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec,
     ops_gcg->MultiVecAxpby(-1.0, mv_ws[1], 1.0, mv_ws[0], start, end, ops_gcg);
     /* 不使用 ss_evec 部分 */
     inner_prod = dbl_ws + (sizeV - sizeC) * sizeW; // inner_prod为内积结果的存储首地址
+    double *res_ref2 = malloc((sizeV - sizeC) * numCheck * sizeof(double));
     // 计算numCheck个残差向量的2范数的平方
     ops_gcg->MultiVecInnerProd('D', mv_ws[0], mv_ws[0], 0,
                                start, end, inner_prod, 1, ops_gcg);
+    ops_gcg->MultiVecInnerProd('D', mv_ws[1], mv_ws[1], 0, start, end, res_ref2, 1, ops_gcg);
     // 计算numCheck个残差向量的2范数
     for (idx = 0; idx < numCheck; ++idx) {
         inner_prod[idx] = sqrt(inner_prod[idx]);
+        res_ref2[idx] = sqrt(res_ref2[idx]);
+        inner_prod[idx] = inner_prod[idx] / res_ref2[idx]; // 计算相对误差
 #if DEBUG
         ops_gcg->Printf("GCG: [%d] %6.14e (%6.4e, %6.4e)\n",
                         startN + idx, ss_eval[startN + idx],
@@ -288,21 +292,20 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec,
     for (idx = 0; idx < numCheck; ++idx) {
         /* 绝对残量 和 相对残量 需分别小于 tol[0] 和 tol[1] */
         if (fabs(ss_eval[startN + idx]) > tol[1]) {
-            if (inner_prod[idx] > tol[0] ||
-                inner_prod[idx] > fabs(ss_eval[startN + idx]) * tol[1]) {
+            if (inner_prod[idx] > tol[1]) {
 #if PRINT_FIRST_UNCONV
-                ops_gcg->Printf("GCG: [%d] %6.14e (%6.4e, %6.4e)\n",
+                ops_gcg->Printf("GCG: [%d] %6.14e (%6.4e)\n",
                                 startN + idx, ss_eval[startN + idx],
-                                inner_prod[idx], inner_prod[idx] / fabs(ss_eval[startN + idx]));
+                                inner_prod[idx]);
 #endif
                 break;
             }
         } else {
-            if (inner_prod[idx] > tol[0]) {
+            if (inner_prod[idx] > tol[1]) {
 #if PRINT_FIRST_UNCONV
-                ops_gcg->Printf("GCG: [%d] %6.14e (%6.4e, %6.4e)\n",
+                ops_gcg->Printf("GCG: [%d] %6.14e (%6.4e)\n",
                                 startN + idx, ss_eval[startN + idx],
-                                inner_prod[idx], inner_prod[idx] / fabs(ss_eval[startN + idx]));
+                                inner_prod[idx]);
 #endif
                 break;
             }
@@ -329,7 +332,7 @@ static int CheckConvergence(void *A, void *B, double *ss_eval, void **ritz_vec,
     num_unconv = 0;
     for (idx = 0; idx < numCheck; ++idx) {
         /* 这一个是不收敛的 */
-        if (inner_prod[idx] > tol[0] || inner_prod[idx] > fabs(ss_eval[startN + idx]) * tol[1]) {
+        if (inner_prod[idx] > tol[1]) {
             /* 上一个是收敛的 */
             if (state) {
                 // 记录当前未收敛区间的起始位置
