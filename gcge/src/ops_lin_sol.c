@@ -7,11 +7,15 @@
 #include <string.h>
 #include <time.h>
 
+#include <slepcbv.h>
+#include <petscksp.h>
+
 #include "ops_lin_sol.h"
 #define DEBUG 0
 
 #define TIME_BPCG 0
 #define TIME_BAMG 0
+#define LINEAR_SOLVER_METHOD 0    //computeW中Ax=B求解方式 O:blockPCG, 1:petsc KSPMINRES, 2:petsc CholeskySolve
 
 typedef struct TimeBlockPCG_ {
     double allreduce_time;
@@ -487,6 +491,130 @@ void BlockPCG(void *mat, void **mv_b, void **mv_x,
     return;
 }
 
+/*
+ * @brief 使用Petsc的MINRES算法求解线性系统Ax=B(右端项是多列的)。
+ * 需循环求解每个列向量
+ * 
+ * @param mat 指向线性系统中的矩阵的指针。
+ * @param mv_b 指向右端项向量的指针。
+ * @param mv_x 指向解向量的指针。
+ * @param start_bx 指向块向量起始索引的指针。
+ * @param end_bx 指向块向量结束索引的指针。
+ * @param ops 指向 OPS_ 结构的指针，该结构包含操作函数指针
+ */
+void PetscKSPMINRES(void *mat, void **mv_b, void **mv_x, int *start_bx, int *end_bx, struct OPS_ *ops) {
+    // 使用KSPMINRES，进行Ax=B求解
+    BlockPCGSolver *bpcg = (BlockPCGSolver *)ops->multi_linear_solver_workspace;    // 沿用上述BlockPCG()功能
+    PetscReal rtol = bpcg->rate;        // 相对容差  注意到 line 440 需要满足两个条件：1.残差小于rate*初始残差，2.残差小于tol*||b||
+    PetscReal atol = bpcg->tol;         // 绝对容差
+    PetscInt maxits = bpcg->max_iter;   // 最大迭代次数
+    PetscReal dtol = 1.0e5;             // 发散容差  blockPCG没有对应参数
+
+    KSP ksp;  // linear solver context
+    KSPCreate(PETSC_COMM_WORLD, &ksp);
+    KSPSetOperators(ksp, (Mat)mat, (Mat)mat);
+    KSPSetType(ksp, KSPMINRES);
+
+    // 设置容差
+    KSPSetTolerances(ksp, rtol, atol, dtol, maxits);
+
+    KSPSetFromOptions(ksp);
+
+    Vec ksp_x;  // 临时存放Ax=B中的每列x
+    Vec ksp_b;
+    VecCreate(PETSC_COMM_WORLD, &ksp_b);
+    VecCreate(PETSC_COMM_WORLD, &ksp_x);
+
+    int length = end_bx[1] - start_bx[1];       // 要求解的数目
+    for (PetscInt i = 0; i < length; i++) {     // todo 多次调用KSPSolve(), 是否有多右端项求解法 ?
+        BVGetColumn((BV)mv_b, start_bx[0] + i, &ksp_b);          
+        BVGetColumn((BV)mv_x, start_bx[1] + i, &ksp_x);       // 获取V的第start_bx[1] + i列写指针​​，允许直接修改该列数据
+
+        PetscErrorCode err = KSPSolve(ksp, ksp_b, ksp_x);
+        if (err) {
+            printf("KSPSolve error: %d\n", err);
+            exit(1);
+        }
+
+        BVRestoreColumn((BV)mv_b, start_bx[0] + i, &ksp_b);   // 释放指针ksp_b
+        BVRestoreColumn((BV)mv_x, start_bx[1] + i, &ksp_x);   // 释放指针ksp_x     
+    }
+    // 获取容差信息
+    //KSPGetTolerances(ksp, &rtol, &atol, &dtol, &maxits);
+    //PetscPrintf(PETSC_COMM_WORLD, "rtol: %g atol: %g dtol: %g maxits: %d \n", rtol, atol, dtol, maxits);
+
+    VecDestroy(&ksp_x);
+    VecDestroy(&ksp_b);
+    KSPDestroy(&ksp);
+}
+
+/*
+ * @brief 使用Petsc的Cholesky分解 直接法求解线性系统Ax=B(右端项是多列的)。
+ * 需循环求解每个列向量
+ * 
+ * @param mat 指向线性系统中的矩阵的指针。
+ * @param mv_b 指向右端项向量的指针。
+ * @param mv_x 指向解向量的指针。
+ * @param start_bx 指向块向量起始索引的指针。
+ * @param end_bx 指向块向量结束索引的指针。
+ * @param ops 指向 OPS_ 结构的指针，该结构包含操作函数指针
+ */
+void PetscCholeskySolve(void *mat, void **mv_b, void **mv_x, int *start_bx, int *end_bx, struct OPS_ *ops) {
+    // LU分解
+    Mat A_bB_AIJ;   // 保存 A - b * B 且转数据格式
+    Mat chol_AbB;   // cholesky分解后的矩阵
+
+    MatConvert((Mat)mat, MATAIJ, MAT_INITIAL_MATRIX, &A_bB_AIJ);    // 现阶段只支持AIJ格式矩阵分解
+    
+    IS row, col;    // 用于LU分解排序
+    MatFactorInfo info;
+
+    MatGetOrdering(A_bB_AIJ, MATORDERINGRCM, &row, &col);       // 矩阵排序
+    MatFactorInfoInitialize(&info);                             
+    MatGetFactor(A_bB_AIJ, MATSOLVERPETSC, MAT_FACTOR_CHOLESKY, &chol_AbB);
+    MatCholeskyFactorSymbolic(chol_AbB, A_bB_AIJ, row, &info);  // 符号分析
+    MatCholeskyFactorNumeric(chol_AbB, A_bB_AIJ, &info);        // 数值分解 
+
+    // 使用LU分解结果，进行Ax=B求解
+    Vec ksp_x;  // 临时存放Ax=B中的每列x
+    Vec ksp_b;
+    VecCreate(PETSC_COMM_WORLD, &ksp_b);
+    VecCreate(PETSC_COMM_WORLD, &ksp_x);
+
+    int length = end_bx[1] - start_bx[1];       // 要求解的数目
+    for (PetscInt i = 0; i < length; i++) {     // todo 多次调用MatSolve(), 可改为MatMatSolve() ?
+        BVGetColumn((BV)mv_b, start_bx[0] + i, &ksp_b);          
+        BVGetColumn((BV)mv_x, start_bx[1] + i, &ksp_x);         // 获取V的第start_bx[1] + i列写指针​​，允许直接修改该列数据
+        // printf("zzy before\n");
+        // VecView(ksp_x, PETSC_VIEWER_STDOUT_WORLD);
+        PetscErrorCode err = MatSolve(chol_AbB, ksp_b, ksp_x);  // 基于LU分解的Ax=b求解
+        //             // 以 MATLAB 格式写入文件
+        //             PetscViewer viewer;
+        //             PetscViewerASCIIOpen(PETSC_COMM_WORLD, "chol_AbB.m", &viewer);
+        //             PetscViewerPushFormat(viewer, PETSC_VIEWER_ASCII_MATLAB);
+        //             MatView(A, viewer);
+        //             PetscViewerPopFormat(viewer);
+        //             PetscViewerDestroy(&viewer);
+        if (err) {
+            printf("MatSolve error: %d\n", err);
+            exit(1);
+        }
+        // printf("zzy after\n");
+        // VecView(ksp_x, PETSC_VIEWER_STDOUT_WORLD);
+        // exit(1);
+
+        BVRestoreColumn((BV)mv_b, start_bx[0] + i, &ksp_b);   // 释放指针ksp_b
+        BVRestoreColumn((BV)mv_x, start_bx[1] + i, &ksp_x);   // 释放指针ksp_x     
+    }
+    // 释放资源
+    ISDestroy(&row);
+    ISDestroy(&col);
+    VecDestroy(&ksp_x);
+    VecDestroy(&ksp_b);
+    MatDestroy(&A_bB_AIJ);
+    MatDestroy(&chol_AbB);
+}
+
 /**
  * @brief 设置块预条件共轭梯度法求解器的相关参数
  * 
@@ -529,7 +657,20 @@ void MultiLinearSolverSetup_BlockPCG(int max_iter, double rate, double tol,
     bpcg_static.residual = -1.0;
 
     ops->multi_linear_solver_workspace = (void *)(&bpcg_static);
-    ops->MultiLinearSolver = BlockPCG;
+    switch(LINEAR_SOLVER_METHOD) { // O: blockPCG, 1: petsc KSPMINRES, 2: petsc CholeskySolve
+        case 0:
+            ops->MultiLinearSolver = BlockPCG;
+            break;
+        case 1:
+            ops->MultiLinearSolver = PetscKSPMINRES;
+            break;
+        case 2:
+            ops->MultiLinearSolver = PetscCholeskySolve;
+            break;
+        default:
+            ops->MultiLinearSolver = BlockPCG;
+            break;
+    }
     return;
 }
 static void BlockAlgebraicMultiGrid(int current_level,

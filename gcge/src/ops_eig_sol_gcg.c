@@ -6,11 +6,6 @@
 #include <string.h>
 #include <time.h>
 #include <slepcbv.h>
-#include <petscksp.h>
-#include <petscmat.h>
-#include <petscvec.h>
-#include <slepcbv.h>
-#include <slepceps.h>
 #include "ops_eig_sol_gcg.h"
 #include "range_tool.h"
 
@@ -978,72 +973,7 @@ static void ComputeW(void **V, void *A, void *B,
     time_gcg.linsol_time -= ops_gcg->GetWtime();
 #endif
     // 非精确求解线性方程组
-    // ops_gcg->MultiLinearSolver(A, b, V, start, end, ops_gcg);
-    {
-        // 此部分之后可以封装到MultiLinearSolver中
-        // LU分解
-        Mat A_bB_AIJ;   // 保存 A - b * B 且转数据格式
-        Mat chol_AbB;   // cholesky分解后的矩阵
-
-        MatConvert((Mat)A, MATAIJ, MAT_INITIAL_MATRIX, &A_bB_AIJ);    // 现阶段只支持AIJ格式矩阵分解
-        
-        IS row, col;    // 用于LU分解排序
-        MatFactorInfo info;
-
-        MatGetOrdering(A_bB_AIJ, MATORDERINGRCM, &row, &col);       // 矩阵排序
-        MatFactorInfoInitialize(&info);                             
-        MatGetFactor(A_bB_AIJ, MATSOLVERPETSC, MAT_FACTOR_CHOLESKY, &chol_AbB);
-        MatCholeskyFactorSymbolic(chol_AbB, A_bB_AIJ, row, &info);  // 符号分析
-        MatCholeskyFactorNumeric(chol_AbB, A_bB_AIJ, &info);        // 数值分解  todo 只需在计算区间内特征值个数时，分解一次
-
-        // 使用LU分解结果，进行Ax=B求解
-        PetscInt sizeAm, sizeAn;
-        MatGetSize(A, &sizeAm, &sizeAn);
-
-        Vec         ksp_x;  // 临时存放Ax=B中的每列x
-        Vec         ksp_b;
-        VecCreate(PETSC_COMM_WORLD, &ksp_b);
-        VecSetSizes(ksp_b, PETSC_DECIDE, sizeAm);
-
-        VecCreate(PETSC_COMM_WORLD, &ksp_x);
-        VecSetSizes(ksp_x, PETSC_DECIDE, sizeAm);
-
-        length = end[1] - start[1];             // 要求解的数目
-        for (PetscInt i = 0; i < length; i++) {     // todo 多次调用MatSolve(), 可改为MatMatSolve() ?
-            BVGetColumn((BV)b, start[0] + i, &ksp_b);          
-            BVGetColumn((BV)V, start[1] + i, &ksp_x);   // 获取V的第start[1] + i列写指针​​，允许直接修改该列数据
-            // printf("zzy before\n");
-            // VecView(ksp_x, PETSC_VIEWER_STDOUT_WORLD);
-            PetscErrorCode err = MatSolve(chol_AbB, ksp_b, ksp_x);       // 基于LU分解的Ax=b求解
-            //             // 以 MATLAB 格式写入文件
-            //             PetscViewer viewer;
-            //             PetscViewerASCIIOpen(PETSC_COMM_WORLD, "chol_AbB.m", &viewer);
-            //             PetscViewerPushFormat(viewer, PETSC_VIEWER_ASCII_MATLAB);
-            //             MatView(A, viewer);
-            //             PetscViewerPopFormat(viewer);
-            //             PetscViewerDestroy(&viewer);
-
-            if (err) {
-                printf("MatSolve error: %d\n", err);
-                exit(1);
-            }
-            // printf("zzy after\n");
-            // VecView(ksp_x, PETSC_VIEWER_STDOUT_WORLD);
-            // exit(1);
-
-
-
-            BVRestoreColumn((BV)b, start[0] + i, &ksp_b);              // 释放指针ksp_b
-            BVRestoreColumn((BV)V, start[1] + i, &ksp_x);   // 释放指针ksp_x     
-        }
-        // 释放资源
-        ISDestroy(&row);
-        ISDestroy(&col);
-        VecDestroy(&ksp_x);
-        VecDestroy(&ksp_b);
-        MatDestroy(&A_bB_AIJ);
-        MatDestroy(&chol_AbB);
-    }
+    ops_gcg->MultiLinearSolver(A, b, V, start, end, ops_gcg);
 
     /* 20210628 recover A */
     if (sigma != 0.0 && B != NULL && ops_gcg->MatAxpby != NULL) {
