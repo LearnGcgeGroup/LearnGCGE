@@ -35,3 +35,4 @@ include(SLEPcConfig)
 
 add_subdirectory(gcge)  # 添加 gcge 库的子目录
 add_subdirectory(src)   # 添加 src 可执行文件的子目录
+add_subdirectory(test)   # 添加 test 子目录
