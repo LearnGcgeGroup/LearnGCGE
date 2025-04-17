@@ -184,4 +184,12 @@ GCGE1.0_linux/include/ops_config.h 中包含该软件包涉及的一些计算环
     echo 'export LD_LIBRARY_PATH=$HOME/deps/mpich-4.2.3/lib:$LD_LIBRARY_PATH' >> ~/.bashrc
     source ~/.bashrc
     ```
-
+- 下载编译安装googletest
+    ```bash
+    git clone https://github.com/google/googletest.git
+    cd googletest
+    mkdir build && cd build
+    cmake ..
+    ninja -j$(nproc)
+    sudo ninja install
+    ```
